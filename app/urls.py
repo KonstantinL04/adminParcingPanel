@@ -21,12 +21,12 @@ from rest_framework.routers import DefaultRouter
 
 router = DefaultRouter()
 router.register("chats", ChatViewSet, basename="chats")
-router.register("excludedusers", ExcludedUserViewSet, basename="excludedusers")
-router.register("emojigroups", EmojiGroupViewSet, basename="emojigroups")
-router.register("textpatterns", TextPatternViewSet, basename="textpatterns")
+router.register("excluded_users", ExcludedUserViewSet, basename="excluded_users")
+router.register("emoji_groups", EmojiGroupViewSet, basename="emoji_groups")
+router.register("text_patterns", TextPatternViewSet, basename="text_patterns")
 router.register("locations", LocationViewSet, basename="locations")
 router.register("settings", SettingViewSet, basename="settings")
-router.register("settingAPI", SettingAPIViewSet, basename="settingAPI")
+router.register("settings_api", SettingAPIViewSet, basename="settings_api")
 
 urlpatterns = [
     path('admin/', admin.site.urls),

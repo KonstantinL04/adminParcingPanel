@@ -1,5 +1,7 @@
 from rest_framework import serializers
 from adminparcing.models import Chat, ExcludedUser, EmojiGroup, TextPattern, Location, Setting, SettingAPI
+from rest_framework_gis.serializers import GeoFeatureModelSerializer
+
 
 class ChatSerializer(serializers.ModelSerializer):
     class Meta:
@@ -21,10 +23,11 @@ class TextPatternSerializer(serializers.ModelSerializer):
         model = TextPattern
         fields = "__all__"
         
-class LocationSerializer(serializers.ModelSerializer):
+class LocationSerializer(GeoFeatureModelSerializer):
     class Meta:
         model = Location
-        fields = "__all__"
+        geo_field = "location"
+        fields = ("id", "name", "synonyms")
         
 class SettingSerializer(serializers.ModelSerializer):
     class Meta:

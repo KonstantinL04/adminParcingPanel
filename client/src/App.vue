@@ -1,85 +1,129 @@
 <script setup>
-import { RouterLink, RouterView } from 'vue-router'
-import HelloWorld from './components/HelloWorld.vue'
+import { useRouter } from "vue-router";
+
+// const router = useRouter();
+// const userStore = useUserStore();
+
+// function logout() {
+//   userStore.logout();
+//   router.push("/login");
+// }
 </script>
 
 <template>
-  <header>
-    <img alt="Vue logo" class="logo" src="@/assets/logo.svg" width="125" height="125" />
+  <div class="app-wrapper">
 
-    <div class="wrapper">
-      <HelloWorld msg="You did it!" />
+    <!-- Боковое меню -->
+    <nav id="sidebarMenu" class="sidebar d-flex flex-column p-3 bg-light">
+      <h4 class="mb-4">Панель управления</h4>
 
-      <nav>
-        <RouterLink to="/">Home</RouterLink>
-        <RouterLink to="/about">About</RouterLink>
-      </nav>
-    </div>
-  </header>
+      <ul class="nav nav-pills flex-column mb-auto">
 
-  <RouterView />
+        <li class="nav-item">
+          <router-link to="/home" class="nav-link">
+            <i class="bi bi-house-door-fill me-2"></i>
+            Главная
+          </router-link>
+        </li>
+        <li class="nav-item">
+          <router-link to="/chats" class="nav-link">
+            <i class="bi bi-chat-dots-fill me-2"></i>
+            Чаты
+          </router-link>
+        </li>
+        <li class="nav-item">
+          <router-link to="/excluded_users" class="nav-link">
+            <i class="bi bi-person-x-fill me-2"></i> Исключённые пользователи
+          </router-link>
+        </li>
+        <li class="nav-item">
+          <router-link to="/emoji_groups" class="nav-link">
+            <i class="bi bi-car-front-fill me-2"></i> Категории
+          </router-link>
+        </li>
+        <li class="nav-item">
+          <router-link to="/text_patterns" class="nav-link">
+            <i class="bi bi-type me-2"></i> Текстовые шаблоны
+          </router-link>
+        </li>
+        <li class="nav-item">
+          <router-link to="/locations" class="nav-link">
+            <i class="bi bi-map-fill me-2"></i> Словарь мест
+          </router-link>
+        </li>
+        <li class="nav-item">
+          <router-link to="/settings" class="nav-link">
+            <i class="bi bi-gear-fill me-2"></i> Настройки
+          </router-link>
+        </li>
+        <li class="nav-item">
+          <router-link to="/settings_api" class="nav-link">
+            <i class="bi bi-key-fill me-2"></i> API-настройки
+          </router-link>
+        </li>
+      </ul>
+
+      <hr />
+
+      <div class="dropdown">
+        <a class="d-flex align-items-center link-dark text-decoration-none dropdown-toggle" data-bs-toggle="dropdown"
+          aria-expanded="false" href="#">
+          <i class="bi bi-person-circle fs-5 me-2"></i>
+          Пользователь
+        </a>
+        <ul class="dropdown-menu text-small shadow">
+          <li><a class="dropdown-item" href="/admin">Админка</a></li>
+        </ul>
+      </div>
+
+      <div class="mt-3">
+        <button class="btn btn-secondary w-100" @click="logout">
+          <i class="bi bi-door-closed-fill"></i> Выйти
+        </button>
+      </div>
+    </nav>
+
+    <!-- Основной контент -->
+    <main class="main-content p-4">
+      <router-view />
+    </main>
+
+  </div>
 </template>
 
 <style scoped>
-header {
-  line-height: 1.5;
-  max-height: 100vh;
+.app-wrapper {
+  display: flex;
+  min-height: 100vh;
 }
 
-.logo {
-  display: block;
-  margin: 0 auto 2rem;
+/* Sidebar */
+.sidebar {
+  width: 250px;
+  min-height: 100vh;
+  border-right: 1px solid #ddd;
 }
 
-nav {
-  width: 100%;
-  font-size: 12px;
-  text-align: center;
-  margin-top: 2rem;
+/* Основной контент */
+.main-content {
+  flex-grow: 1;
 }
 
-nav a.router-link-exact-active {
-  color: var(--color-text);
+/* Активный пункт меню bootstrap */
+.nav-link.router-link-active {
+  background-color: #0d6efd;
+  color: white !important;
 }
 
-nav a.router-link-exact-active:hover {
-  background-color: transparent;
+.nav-link {
+  display: flex;
+  align-items: center;
+  padding: 10px 12px;
+  color: #333;
 }
 
-nav a {
-  display: inline-block;
-  padding: 0 1rem;
-  border-left: 1px solid var(--color-border);
-}
-
-nav a:first-of-type {
-  border: 0;
-}
-
-@media (min-width: 1024px) {
-  header {
-    display: flex;
-    place-items: center;
-    padding-right: calc(var(--section-gap) / 2);
-  }
-
-  .logo {
-    margin: 0 2rem 0 0;
-  }
-
-  header .wrapper {
-    display: flex;
-    place-items: flex-start;
-    flex-wrap: wrap;
-  }
-
-  nav {
-    text-align: left;
-    margin-left: -1rem;
-    font-size: 1rem;
-
-    padding: 1rem 0;
-    margin-top: 1rem;
-  }
+.nav-link:hover {
+  background: #e7e7e7;
+  color: #000;
 }
 </style>
