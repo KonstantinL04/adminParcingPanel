@@ -1,0 +1,4 @@
+django==5.2.7
+sycopg2-binary==2.9.11
+cryptography==46.0.3
+djangorestframework
