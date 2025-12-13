@@ -47,6 +47,11 @@ import { useRouter } from "vue-router";
           </router-link>
         </li>
         <li class="nav-item">
+          <router-link to="/routes" class="nav-link">
+            <i class="bi bi-sign-turn-slight-right-fill me-2"></i> Маршруты
+          </router-link>
+        </li>
+        <li class="nav-item">
           <router-link to="/settings" class="nav-link">
             <i class="bi bi-gear-fill me-2"></i> Настройки
           </router-link>

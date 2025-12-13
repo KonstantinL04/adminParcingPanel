@@ -6,41 +6,80 @@ import joblib
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.metrics.pairwise import cosine_similarity
+from django.contrib.gis.geos import Point
+from adminparcing.models import Location, Route, RoutePoint
 
 # ------------------ Загрузка модели ------------------
 try:
-    vectorizer = joblib.load("vectorizer_places.pkl")
-    knn = joblib.load("knn_places.pkl")
+    vectorizer = joblib.load("adminparcing/utils/nlp/vectorizer_places.pkl")
+    knn = joblib.load("adminparcing/utils/nlp/knn_places.pkl")
     print("✅ NLP модель для координат загружена!")
 except:
     print("❌ Модель не найдена, нужно обучить сначала")
     vectorizer = None
     knn = None
 
-# ------------------ Загрузка CSV ------------------
-points_df = pd.read_csv("points.csv")
-
-try:
-    routes_df = pd.read_csv("routes.csv")
-    print("✅ Маршруты загружены!")
-except:
-    print("❌ Файл routes.csv не найден")
-    routes_df = pd.DataFrame()
-
 # ------------------ Словарь мест ------------------
-places_dict = {}
-for _, row in points_df.iterrows():
-    main_place = str(row["place"])
-    synonyms = str(row["synonyms"])
-    place_variants = [main_place]
-    if synonyms and synonyms != "nan":
-        syn_list = re.split(r'[;,]', synonyms)
-        place_variants.extend([syn.strip() for syn in syn_list if syn.strip()])
-    places_dict[main_place] = {
-        'variants': place_variants,
-        'lat': row['lat'],
-        'lon': row['lon']
-    }
+
+def load_places():
+    places = {}
+
+    for loc in Location.objects.all():
+        variants = [loc.name]
+
+        if isinstance(loc.synonyms, list):
+            variants.extend(loc.synonyms)
+
+        places[loc.name] = {
+            "variants": variants,
+            "lat": loc.location.y,
+            "lon": loc.location.x,
+        }
+
+    return places
+
+
+places_dict = load_places()
+
+def load_routes():
+    routes = []
+
+    qs = (
+        Route.objects
+        .filter(enabled=True)
+        .prefetch_related("points__location")
+        .select_related("start_point", "end_point")
+    )
+
+    for r in qs:
+        points = [r.start_point.name]
+
+        ordered_points = (
+            RoutePoint.objects
+            .filter(route=r)
+            .order_by("order")
+            .select_related("location")
+        )
+
+        for p in ordered_points:
+            points.append(p.location.name)
+
+        points.append(r.end_point.name)
+
+        routes.append({
+            "name": r.name,
+            "points": points,
+        })
+
+    return routes
+
+
+routes_data = load_routes()
+
+def reload_nlp_data():
+    global places_dict, routes_data
+    places_dict = load_places()
+    routes_data = load_routes()
 
 # ------------------ Нормализация ------------------
 def normalize_text(text: str) -> str:
@@ -85,17 +124,16 @@ def extract_partial_route(text: str, threshold=0.7):
             end_candidates = resolve_place_or_group(end_text)
 
             # 🔹 Ищем маршрут, где присутствует хотя бы одна пара этих точек
-            for _, route in routes_df.iterrows():
-                route_points = [route['start_point']]
-                if pd.notna(route['points_in_between']):
-                    route_points += [p.strip() for p in str(route['points_in_between']).split(',')]
-                route_points.append(route['end_point'])
+            for route in routes_data:
+                route_points = route["points"]
 
                 start_idx, end_idx = None, None
+
                 for s in start_candidates:
                     if s in route_points:
                         start_idx = route_points.index(s)
                         break
+
                 for e in end_candidates:
                     if e in route_points:
                         end_idx = route_points.index(e)
@@ -103,11 +141,14 @@ def extract_partial_route(text: str, threshold=0.7):
 
                 if start_idx is not None and end_idx is not None:
                     if start_idx <= end_idx:
-                        partial_route = route_points[start_idx:end_idx+1]
+                        partial = route_points[start_idx:end_idx + 1]
                     else:
-                        partial_route = route_points[end_idx:start_idx+1][::-1]
+                        partial = route_points[end_idx:start_idx + 1][::-1]
 
-                    return [(p, places_dict[p]['lat'], places_dict[p]['lon']) for p in partial_route]
+                    return [
+                        (p, places_dict[p]["lat"], places_dict[p]["lon"])
+                        for p in partial
+                    ]
 
     return []
 
@@ -174,6 +215,6 @@ def match_location(text: str, threshold=0.7):
     return []
 
 
-matches = match_location("от поста до урика азс чисто")
-for place, lat, lon in matches:
-    print(f"{place}: {lat}, {lon}")
+# matches = match_location("от поста до урика азс чисто")
+# for place, lat, lon in matches:
+#     print(f"{place}: {lat}, {lon}")

@@ -1,6 +1,7 @@
 # parsing_controller.py
 import asyncio
 import threading
+from adminparcing.utils.nlp.NLPModel import reload_nlp_data
 from adminparcing.utils.telegram.script import client, main as telethon_main
 
 class ParserController:
@@ -19,7 +20,7 @@ class ParserController:
     def start(self):
         if self.running:
             return False
-
+        reload_nlp_data()
         asyncio.run_coroutine_threadsafe(
             telethon_main(),
             self.loop

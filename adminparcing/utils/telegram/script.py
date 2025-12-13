@@ -15,14 +15,28 @@ from telethon.tl import types
 from dotenv import load_dotenv
 import tempfile
 import time
-from NLPModel import match_location
+from adminparcing.utils.nlp.NLPModel import match_location
+import django
 
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "app.settings")  
+django.setup()
+
+from adminparcing.models import (
+    Chat,
+    AlertCategory,
+    ExcludedUser,
+    SettingAPI,
+)
 
 # ===================== НАСТРОЙКИ =====================
 load_dotenv()
-API_ID = int(os.getenv("API_ID"))
-API_HASH = os.getenv("API_HASH")
-SESSION_NAME = os.getenv("SESSION_NAME", "parser")
+def load_api_credentials():
+    api_id = SettingAPI.objects.get(key="API_ID").value
+    api_hash = SettingAPI.objects.get(key="API_HASH").value
+    session_name = SettingAPI.objects.get(key="SESSION_NAME").value
+    return int(api_id), api_hash, session_name
+
+API_ID, API_HASH, SESSION_NAME = load_api_credentials()
 EXCEL_FILE = "new_messages.xlsx"
 
 # -------------------- БУФФЕРЫ --------------------
@@ -32,31 +46,29 @@ last_location_by_user: Dict[int, Dict[str, Any]] = {}
 last_classified_by_author: Dict[Tuple[str, int], Dict[str, Any]] = {}
 
 # ============= ЧАТЫ ДЛЯ МОНИТОРИНГА ==============
-raw_chats = os.getenv("TARGET_CHATS", "")
-if raw_chats:
-    TARGET_CHATS = []
-    for c in raw_chats.split(","):
-        c = c.strip()
-        if not c:   
-            continue
-        # пытаемся преобразовать в число
+def load_target_chats():
+    chats = []
+    for c in Chat.objects.filter(enabled=True):
         try:
-            TARGET_CHATS.append(int(c))
+            chats.append(int(c.chat_id))
         except ValueError:
-            TARGET_CHATS.append(c)  # оставляем ссылку или username
-else:
-    TARGET_CHATS = ["https://t.me/otladka_dps"]
+            chats.append(c.chat_id)
+    return chats
+
+TARGET_CHATS = load_target_chats()
 
 print(TARGET_CHATS)
 # ============= БЛОКИРОВАННЫЕ ПОЛЬЗОВАТЕЛИ ==============
-raw_excluded = os.getenv("EXCLUDED_USERS", "")
-EXCLUDED_USERS: List[Any] = []
-if raw_excluded:
-    for it in (x.strip() for x in raw_excluded.split(",") if x.strip()):
-        if it.isdigit():
-            EXCLUDED_USERS.append(int(it))
+def load_excluded_users():
+    result = []
+    for u in ExcludedUser.objects.all():
+        if u.value.isdigit():
+            result.append(int(u.value))
         else:
-            EXCLUDED_USERS.append(it.lower())
+            result.append(u.value.lower())
+    return result
+
+EXCLUDED_USERS = load_excluded_users()
    
 # ===================== ЛОКАЛЬНОЕ ВРЕМЯ =====================         
 LOCAL_OFFSET_ENV = os.getenv("LOCAL_OFFSET", "")
@@ -73,24 +85,20 @@ else:
 UNCLASSIFIED_BUFFER_SECONDS = int(os.getenv("UNCLASSIFIED_BUFFER_SECONDS", "300"))  # 5 минут по умолчанию
 
 # ===================== КЛАССИФИКАЦИЯ =====================
-emoji_groups = {
-    "Clear": ["✅", "✔️", "☑️", "👍", "👌", "🤟", "🤘", "🤙"],
-    "DPS": ["🚔", "🚓", "🚨", "👮", "👮‍♀️", "👮‍♂️"],
-    "Crash": ["⚠️", "❗"],
-    "Camera": ["📷", "📸", "📹", "🎥", "📽️", "🎦"]
-}
+def load_categories():
+    emoji_groups = {}
+    text_patterns = {}
 
-text_patterns = {
-    "Clear": [r"\bчисто\b", r"\bпусто\b"],
-    "DPS": [
-        r"\bстоят\b", r"\bактив\b", r"\bработают\b", r"\bдпс\b", r"\bэкипаж\b",
-        r"\bэкипажа\b", r"\bбратья\b", r"\bменты\b", r"\bмент\b",
-        r"\bмусор\b", r"\bмусора\b", r"\bшкода\b",r"\bборт\b", r"\bствол\b",r"\bствола\b", r"\bпалки\b"
-    ],
-    "Crash": [r"\bавария\b", r"\bДТП\b"],
-    "Camera": [r"\bтринога\b", r"\bкамера\b"]
-    
-}
+    for cat in AlertCategory.objects.filter(enabled=True):
+        if cat.emoji_patterns:
+            emoji_groups[cat.name] = cat.emoji_patterns
+        if cat.text_patterns:
+            text_patterns[cat.name] = cat.text_patterns
+
+    return emoji_groups, text_patterns
+
+
+emoji_groups, text_patterns = load_categories()
 
 # ===================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ =====================
 def safe_sheet_title(name: str) -> str:

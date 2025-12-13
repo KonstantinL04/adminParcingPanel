@@ -1,7 +1,7 @@
 from rest_framework.viewsets import GenericViewSet
-from adminparcing.models import Chat, ExcludedUser, AlertCategory, Location, Setting, SettingAPI
+from adminparcing.models import Chat, ExcludedUser, AlertCategory, Location, RoutePoint, Route, Setting, SettingAPI
 from rest_framework import mixins, viewsets
-from adminparcing.serializers import ChatSerializer, ExcludedUserSerializer, AlertCategorySerializer, LocationSerializer, SettingSerializer, SettingAPISerializer
+from adminparcing.serializers import ChatSerializer, ExcludedUserSerializer, AlertCategorySerializer, LocationSerializer, RoutePointSerializer, RouteCreateSerializer, RouteSerializer, SettingSerializer, SettingAPISerializer
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.permissions import IsAuthenticatedOrReadOnly
@@ -45,6 +45,19 @@ class LocationViewSet(mixins.ListModelMixin,
                   GenericViewSet):
     queryset = Location.objects.all()
     serializer_class = LocationSerializer
+ 
+class RouteViewSet(mixins.ListModelMixin,
+                   mixins.CreateModelMixin,
+                   mixins.UpdateModelMixin,
+                   mixins.RetrieveModelMixin,
+                   mixins.DestroyModelMixin,
+                   GenericViewSet):
+    queryset = Route.objects.prefetch_related("points", "points__location")
+
+    def get_serializer_class(self):
+        if self.action in ("create", "update", "partial_update"):
+            return RouteCreateSerializer
+        return RouteSerializer
     
 class SettingViewSet(mixins.ListModelMixin,
                   mixins.CreateModelMixin, 

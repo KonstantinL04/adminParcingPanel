@@ -41,6 +41,49 @@ class Location(models.Model):
     def __str__(self):
         return self.name
 
+# ✔ Маршруты
+class Route(models.Model):
+    name = models.CharField(max_length=255, unique=True)
+
+    start_point = models.ForeignKey(
+        Location,
+        on_delete=models.PROTECT,
+        related_name="routes_start"
+    )
+
+    end_point = models.ForeignKey(
+        Location,
+        on_delete=models.PROTECT,
+        related_name="routes_end"
+    )
+
+    enabled = models.BooleanField(default=True)
+
+    def __str__(self):
+        return self.name
+
+# ✔ Точки маршрута    
+class RoutePoint(models.Model):
+    route = models.ForeignKey(
+        Route,
+        on_delete=models.CASCADE,
+        related_name="points"
+    )
+
+    location = models.ForeignKey(
+        Location,
+        on_delete=models.PROTECT
+    )
+
+    order = models.PositiveIntegerField()
+
+    class Meta:
+        ordering = ["order"]
+        unique_together = ("route", "order")
+
+    def __str__(self):
+        return f"{self.route.name}: {self.order} → {self.location.name}"
+
 # ✔ Настройки системы
 class Setting(models.Model):
     key = models.CharField(max_length=50, unique=True)
