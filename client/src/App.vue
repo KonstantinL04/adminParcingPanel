@@ -20,7 +20,7 @@ import { useRouter } from "vue-router";
       <ul class="nav nav-pills flex-column mb-auto">
 
         <li class="nav-item">
-          <router-link to="/home" class="nav-link">
+          <router-link to="/parser" class="nav-link">
             <i class="bi bi-house-door-fill me-2"></i>
             Главная
           </router-link>
@@ -37,13 +37,8 @@ import { useRouter } from "vue-router";
           </router-link>
         </li>
         <li class="nav-item">
-          <router-link to="/emoji_groups" class="nav-link">
+          <router-link to="/alert_categories" class="nav-link">
             <i class="bi bi-car-front-fill me-2"></i> Категории
-          </router-link>
-        </li>
-        <li class="nav-item">
-          <router-link to="/text_patterns" class="nav-link">
-            <i class="bi bi-type me-2"></i> Текстовые шаблоны
           </router-link>
         </li>
         <li class="nav-item">

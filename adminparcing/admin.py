@@ -1,10 +1,9 @@
 from django.contrib import admin
-from .models import Chat, ExcludedUser, EmojiGroup, TextPattern, Location, Setting, SettingAPI
+from .models import Chat, ExcludedUser, AlertCategory, Location, Setting, SettingAPI
 
 admin.site.register(Chat)
 admin.site.register(ExcludedUser)
-admin.site.register(EmojiGroup)
-admin.site.register(TextPattern)
+admin.site.register(AlertCategory)
 admin.site.register(Location)
 admin.site.register(Setting)
 

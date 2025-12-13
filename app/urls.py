@@ -16,14 +16,14 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import include, path
-from adminparcing.api import ChatViewSet, ExcludedUserViewSet, EmojiGroupViewSet, TextPatternViewSet, LocationViewSet, SettingViewSet, SettingAPIViewSet
+from adminparcing.api import ChatViewSet, ExcludedUserViewSet, AlertCategoryViewSet, LocationViewSet, SettingViewSet, SettingAPIViewSet, stop_parser, start_parser, parser_status
 from rest_framework.routers import DefaultRouter
+
 
 router = DefaultRouter()
 router.register("chats", ChatViewSet, basename="chats")
 router.register("excluded_users", ExcludedUserViewSet, basename="excluded_users")
-router.register("emoji_groups", EmojiGroupViewSet, basename="emoji_groups")
-router.register("text_patterns", TextPatternViewSet, basename="text_patterns")
+router.register("alert_categories", AlertCategoryViewSet, basename="alert_categories")
 router.register("locations", LocationViewSet, basename="locations")
 router.register("settings", SettingViewSet, basename="settings")
 router.register("settings_api", SettingAPIViewSet, basename="settings_api")
@@ -31,5 +31,8 @@ router.register("settings_api", SettingAPIViewSet, basename="settings_api")
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include(router.urls)),
+    path("api/parser/start/", start_parser),
+    path("api/parser/stop/", stop_parser),
+    path("api/parser/status/", parser_status),
 
 ]

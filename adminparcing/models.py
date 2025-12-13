@@ -20,22 +20,17 @@ class ExcludedUser(models.Model):
         return self.value
 
 
-# ✔ Группы эмодзи
-class EmojiGroup(models.Model):
-    category = models.CharField(max_length=50)
-    emojis = models.JSONField()
+# ✔ Категории
+class AlertCategory(models.Model):
+    name = models.CharField(max_length=50, unique=True)
+
+    text_patterns = models.JSONField(default=list, blank=True)
+    emoji_patterns = models.JSONField(default=list, blank=True)
+
+    enabled = models.BooleanField(default=True)
 
     def __str__(self):
-        return self.category
-
-
-# ✔ Паттерны текста
-class TextPattern(models.Model):
-    category = models.CharField(max_length=50)
-    pattern = models.CharField(max_length=200)
-
-    def __str__(self):
-        return f"{self.category}: {self.pattern}"
+        return self.name
 
 # ✔ Словарь мест
 class Location(models.Model):

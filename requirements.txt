@@ -2,3 +2,12 @@ django==5.2.7
 sycopg2-binary==2.9.11
 cryptography==46.0.3
 djangorestframework
+telethon==1.42.0
+openpyxl==3.1.5
+joblib==1.5.2
+pandas==2.3.3
+scikit-learn==1.8.0
+qrcode==8.2
+channels==4.3.2
+daphne==4.2.1
+channels-redis==4.3.0
