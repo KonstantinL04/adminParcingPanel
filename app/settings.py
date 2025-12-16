@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'adminparcing',
+    'events',
     'django.contrib.gis',
     'rest_framework',
     'rest_framework_gis',
@@ -113,10 +114,8 @@ ASGI_APPLICATION = "app.asgi.application"
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
-        "CONFIG": {
-            "hosts": [("127.0.0.1", 6379)],
-        },
-    }
+        "CONFIG": {"hosts": [("localhost", 6379)]},
+    },
 }
 
 

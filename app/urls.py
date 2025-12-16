@@ -16,7 +16,18 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import include, path
-from adminparcing.api import ChatViewSet, ExcludedUserViewSet, AlertCategoryViewSet, LocationViewSet, RouteViewSet, SettingViewSet, SettingAPIViewSet, stop_parser, start_parser, parser_status
+from adminparcing.api import (
+    ChatViewSet, 
+    ExcludedUserViewSet, 
+    AlertCategoryViewSet, 
+    LocationViewSet, 
+    RouteViewSet, 
+    SettingViewSet, 
+    SettingAPIViewSet, 
+    stop_parser, 
+    start_parser, 
+    parser_status
+)
 from rest_framework.routers import DefaultRouter
 
 
@@ -35,5 +46,5 @@ urlpatterns = [
     path("api/parser/start/", start_parser),
     path("api/parser/stop/", stop_parser),
     path("api/parser/status/", parser_status),
-
+    path("api/events/", include("events.urls")),
 ]
