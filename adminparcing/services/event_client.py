@@ -1,11 +1,12 @@
 import requests
 from django.conf import settings
+import os
+EVENTS_API_URL = os.getenv("EVENTS_API_URL")
 
-EVENTS_API = "http://localhost:8000/api/events/messages/"
-
-def send_parsed_message(payload: dict):
-    try:
-        r = requests.post(EVENTS_API, json=payload, timeout=5)
-        r.raise_for_status()
-    except Exception as e:
-        print("❌ Ошибка отправки в events:", e)
+def send_parsed_message(data: dict):
+    r = requests.post(
+        f"{EVENTS_API_URL}/messages/",
+        json=data,
+        timeout=5
+    )
+    r.raise_for_status()

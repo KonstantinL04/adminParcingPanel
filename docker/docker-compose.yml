@@ -1,0 +1,39 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgis/postgis:15-3.3
+    environment:
+      POSTGRES_DB: adminpanel
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  adminparcing:
+    build:
+      context: ..
+      dockerfile: docker/adminparcing/Dockerfile
+    env_file:
+      - ../.env
+    depends_on:
+      - postgres
+      - events
+    ports:
+      - "8000:8000"
+
+  events:
+    build:
+      context: ..
+      dockerfile: docker/events/Dockerfile
+    env_file:
+      - ../.env
+    depends_on:
+      - postgres
+    ports:
+      - "8001:8000"
+
+volumes:
+  postgres_data:
