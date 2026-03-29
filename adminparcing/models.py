@@ -26,17 +26,54 @@ class AlertCategory(models.Model):
 
     text_patterns = models.JSONField(default=list, blank=True)
     emoji_patterns = models.JSONField(default=list, blank=True)
+    ttl_minutes  = models.PositiveIntegerField(default=60)
+    confirm_threshold = models.IntegerField(default=3)
+    deny_threshold = models.IntegerField(default=-3)
 
     enabled = models.BooleanField(default=True)
 
     def __str__(self):
         return self.name
 
+# ✔ Регионы/области
+class Region(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+
+    def __str__(self):
+        return self.name
+
+# ✔ Города
+class City(models.Model):
+    region = models.ForeignKey(
+        Region,
+        on_delete=models.CASCADE,
+        related_name="cities"
+    )
+    name = models.CharField(max_length=100)
+
+    class Meta:
+        unique_together = ("region", "name")
+
+    def __str__(self):
+        return f"{self.name} ({self.region.name})"
+
 # ✔ Словарь мест
 class Location(models.Model):
     name = models.CharField(max_length=255)
     location = gis_models.PointField(default=Point(0.0, 0.0))
     synonyms = models.JSONField(default=list)
+    chat = models.ForeignKey(
+        Chat,
+        on_delete=models.PROTECT,
+        related_name="locations"
+    )
+    city = models.ForeignKey(
+        City,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="locations"
+    )
 
     def __str__(self):
         return self.name

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from adminparcing.models import Chat, ExcludedUser, AlertCategory, Location, Route, RoutePoint, Setting, SettingAPI
+from adminparcing.models import Chat, ExcludedUser, AlertCategory, Region, City, Location, Route, RoutePoint, Setting, SettingAPI
 from rest_framework_gis.serializers import GeoFeatureModelSerializer
 import re
 
@@ -21,6 +21,9 @@ class AlertCategorySerializer(serializers.ModelSerializer):
             "name",
             "text_patterns",
             "emoji_patterns",
+            "ttl_minutes",
+            "confirm_threshold",
+            "deny_threshold",
             "enabled",
         ]
 
@@ -39,12 +42,39 @@ class AlertCategorySerializer(serializers.ModelSerializer):
             if not isinstance(e, str):
                 raise serializers.ValidationError("Все эмодзи должны быть строками")
         return value
+
+class RegionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Region
+        fields = ("id", "name")
+
+class CitySerializer(serializers.ModelSerializer):
+    region_name = serializers.CharField(source="region.name", read_only=True)
+
+    class Meta:
+        model = City
+        fields = ("id", "name", "region", "region_name")
         
 class LocationSerializer(GeoFeatureModelSerializer):
+    chat_title = serializers.CharField(source="chat.title", read_only=True)
+    city_name = serializers.CharField(source="city.name", read_only=True)
+    region_name = serializers.CharField(source="city.region.name", read_only=True)
+    region_id = serializers.IntegerField(source="city.region_id", read_only=True)
+
     class Meta:
         model = Location
         geo_field = "location"
-        fields = ("id", "name", "synonyms")
+        fields = (
+            "id",
+            "name",
+            "synonyms",
+            "chat",
+            "chat_title",
+            "city",
+            "city_name",
+            "region_name",
+            "region_id",
+        )
         
 class RoutePointSerializer(serializers.ModelSerializer):
     location_name = serializers.CharField(
@@ -138,6 +168,29 @@ class SettingSerializer(serializers.ModelSerializer):
         fields = "__all__"
         
 class SettingAPISerializer(serializers.ModelSerializer):
+    value = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
     class Meta:
         model = SettingAPI
-        fields = "__all__"
+        fields = ("id", "key", "value")
+
+    def create(self, validated_data):
+        value = validated_data.pop("value", None)
+        obj = SettingAPI.objects.create(**validated_data)
+        if value is not None:
+            obj.value = value
+            obj.save(update_fields=["_value"])
+        return obj
+
+    def update(self, instance, validated_data):
+        value = validated_data.pop("value", None)
+        for attr, val in validated_data.items():
+            setattr(instance, attr, val)
+        if value is not None:
+            instance.value = value
+        instance.save()
+        return instance
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data["value"] = ""
+        return data

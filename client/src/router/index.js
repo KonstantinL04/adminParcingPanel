@@ -7,6 +7,8 @@ import LocationView from '../views/LocationView.vue';
 import SettingView from '../views/SettingView.vue';
 import SettingAPIView from '../views/SettingAPIView.vue';
 import ParserView from '../views/ParserView.vue';
+import NlpTrainView from '../views/NlpTrainView.vue';
+import EventsMapView from '../views/EventsMapView.vue';
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -50,6 +52,16 @@ const router = createRouter({
       path: "/parser",
       name: "ParserView",
       component: ParserView
+    },
+    {
+      path: "/events-map",
+      name: "EventsMapView",
+      component: EventsMapView
+    },
+    {
+      path: "/nlp",
+      name: "NlpTrainView",
+      component: NlpTrainView
     },
   ],
 })

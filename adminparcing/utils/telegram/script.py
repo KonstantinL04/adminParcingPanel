@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import os
+import sys
 import re
 import base64
 import asyncio
@@ -13,8 +14,10 @@ import django
 from dotenv import load_dotenv
 from telethon import TelegramClient, events, functions
 from telethon.errors import SessionPasswordNeededError
+import qrcode
 import websockets
 import json
+from asgiref.sync import sync_to_async
 
 
 # ─────────────────────────────────────────────────────────────
@@ -23,8 +26,7 @@ import json
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "app.settings")
 django.setup()
 
-from adminparcing.models import Chat, AlertCategory, ExcludedUser, Location, SettingAPI
-from adminparcing.utils.nlp.NLPModel import match_location
+from adminparcing.models import Chat, AlertCategory, ExcludedUser, SettingAPI
 from adminparcing.services.event_client import send_parsed_message
 
 # ─────────────────────────────────────────────────────────────
@@ -32,13 +34,39 @@ from adminparcing.services.event_client import send_parsed_message
 # ─────────────────────────────────────────────────────────────
 load_dotenv()
 
+SKIP_DB_BOOTSTRAP = any(
+    cmd in sys.argv
+    for cmd in (
+        "makemigrations",
+        "migrate",
+        "collectstatic",
+        "shell",
+        "dbshell",
+        "check",
+        "test",
+    )
+)
+
 def load_api_credentials():
-    api_id = int(SettingAPI.objects.get(key="API_ID").value)
-    api_hash = SettingAPI.objects.get(key="API_HASH").value
-    session_name = SettingAPI.objects.get(key="SESSION_NAME").value
+    try:
+        api_id_val = SettingAPI.objects.get(key="API_ID").value
+        api_hash = SettingAPI.objects.get(key="API_HASH").value
+        session_name = SettingAPI.objects.get(key="SESSION_NAME").value
+    except SettingAPI.DoesNotExist:
+        return None, None, None
+    if not api_id_val or not api_hash or not session_name:
+        return None, None, None
+    try:
+        api_id = int(api_id_val)
+    except (TypeError, ValueError):
+        return None, None, None
     return api_id, api_hash, session_name
 
-API_ID, API_HASH, SESSION_NAME = load_api_credentials()
+API_ID = None
+API_HASH = None
+SESSION_NAME = None
+if not SKIP_DB_BOOTSTRAP:
+    API_ID, API_HASH, SESSION_NAME = load_api_credentials()
 
 # ─────────────────────────────────────────────────────────────
 # Timezone
@@ -50,7 +78,6 @@ LOCAL_TZ = timezone(timedelta(hours=int(LOCAL_OFFSET_ENV))) if LOCAL_OFFSET_ENV 
 # Runtime buffers
 # ─────────────────────────────────────────────────────────────
 GEO_TTL_SECONDS = 300
-last_location_by_user: Dict[int, Dict[str, Any]] = {}
 recent_unclassified_by_chat: Dict[Any, List[Dict[str, Any]]] = {}
 last_classified_by_author: Dict[tuple, Dict[str, Any]] = {}
 
@@ -58,8 +85,11 @@ last_classified_by_author: Dict[tuple, Dict[str, Any]] = {}
 # Bootstrap data
 # ─────────────────────────────────────────────────────────────
 def load_target_chats():
+    global CHAT_ID_TO_PK
     result = []
+    CHAT_ID_TO_PK = {}
     for c in Chat.objects.filter(enabled=True):
+        CHAT_ID_TO_PK[str(c.chat_id)] = c.id
         try:
             result.append(int(c.chat_id))
         except ValueError:
@@ -84,25 +114,37 @@ def load_categories():
             emoji_groups[cat.name] = cat.emoji_patterns
     return category_map, text_patterns, emoji_groups
 
-def load_locations():
-    location_map = {}
-    for loc in Location.objects.all():
-        keys = [loc.name] + loc.synonyms
-        for key in keys:
-            location_map[key.lower()] = {
-                "id": loc.id,
-                "name": loc.name,
-                "point": loc.location,
-            }
-    return location_map
+TARGET_CHATS: List[Any] = []
+EXCLUDED_USERS: set = set()
+CATEGORY_MAP: Dict[str, Dict[str, Any]] = {}
+TEXT_PATTERNS: Dict[str, List[str]] = {}
+EMOJI_GROUPS: Dict[str, List[str]] = {}
+CHAT_ID_TO_PK: Dict[str, int] = {}
 
-TARGET_CHATS = load_target_chats()
-EXCLUDED_USERS = load_excluded_users()
-CATEGORY_MAP, TEXT_PATTERNS, EMOJI_GROUPS = load_categories()
-LOCATION_MAP = load_locations()
+def ensure_bootstrap_data():
+    global TARGET_CHATS, EXCLUDED_USERS, CATEGORY_MAP, TEXT_PATTERNS, EMOJI_GROUPS
+    if SKIP_DB_BOOTSTRAP:
+        return
+    if not TARGET_CHATS:
+        TARGET_CHATS = load_target_chats()
+    if not EXCLUDED_USERS:
+        EXCLUDED_USERS = load_excluded_users()
+    if not CATEGORY_MAP or not TEXT_PATTERNS or not EMOJI_GROUPS:
+        CATEGORY_MAP, TEXT_PATTERNS, EMOJI_GROUPS = load_categories()
 
-print(f"✅ Загружено категорий: {len(CATEGORY_MAP)}")
-print(f"✅ Чатов для парсинга: {len(TARGET_CHATS)}")
+if not SKIP_DB_BOOTSTRAP:
+    ensure_bootstrap_data()
+    print(f"✅ Загружено категорий: {len(CATEGORY_MAP)}")
+    print(f"✅ Чатов для парсинга: {len(TARGET_CHATS)}")
+
+def prepare_runtime():
+    global API_ID, API_HASH, SESSION_NAME
+    if SKIP_DB_BOOTSTRAP:
+        return False
+    if API_ID is None or API_HASH is None or SESSION_NAME is None:
+        API_ID, API_HASH, SESSION_NAME = load_api_credentials()
+    ensure_bootstrap_data()
+    return bool(API_ID and API_HASH and SESSION_NAME)
 
 # ─────────────────────────────────────────────────────────────
 # Helpers
@@ -138,13 +180,16 @@ def classify_message(text: str, emojis: List[str]) -> Optional[str]:
     return None
 
 def get_chat_key(event) -> str:
+    # Use raw Telegram chat id for consistency with stored chat_id
+    if getattr(event, "chat_id", None) is not None:
+        return str(event.chat_id)
     peer = event.message.peer_id
     if hasattr(peer, "channel_id"):
-        return f"channel_{peer.channel_id}"
+        return str(peer.channel_id)
     if hasattr(peer, "chat_id"):
-        return f"chat_{peer.chat_id}"
+        return str(peer.chat_id)
     if hasattr(peer, "user_id"):
-        return f"user_{peer.user_id}"
+        return str(peer.user_id)
     return "unknown"
 
 async def extract_full_text(event, client) -> str:
@@ -277,11 +322,10 @@ def maybe_merge_with_previous(chat_key, sender_id, combined_text, category, auth
     prev_saved = last_classified_by_author.get((chat_key, sender_id))
     if prev_saved:
         prev_payload = prev_saved.get("payload")
-        prev_cat = prev_payload.get("category_name")
+        prev_cat = prev_payload.get("category")
         if not prev_cat:
             prev_payload["text"] += " " + combined_text
-            prev_payload["category_name"] = category
-            prev_payload["category_id"] = CATEGORY_MAP.get(category, {}).get("id")
+            prev_payload["category"] = CATEGORY_MAP.get(category, {}).get("id")
             send_parsed_message(prev_payload)
             last_classified_by_author[(chat_key, sender_id)] = {
                 "payload": prev_payload,
@@ -296,9 +340,8 @@ def maybe_merge_with_previous(chat_key, sender_id, combined_text, category, auth
 # ─────────────────────────────────────────────────────────────
 # Telegram client
 # ─────────────────────────────────────────────────────────────
-client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
+client = None
 
-@client.on(events.NewMessage(chats=TARGET_CHATS))
 async def handler(event):
     sender = await event.get_sender()
     sender_id = getattr(sender, "id", None)
@@ -309,15 +352,6 @@ async def handler(event):
         return
 
     chat_key = get_chat_key(event)
-
-    # ── Telegram geo ─────────────────────────────
-    if getattr(event.message, "geo", None):
-        last_location_by_user[sender_id] = {
-            "lat": event.message.geo.lat,
-            "lon": event.message.geo.long,
-            "ts": time.time()
-        }
-        return
 
     text = await extract_full_text(event, client)
     if not text:
@@ -336,42 +370,25 @@ async def handler(event):
     if question_text:
         combined_text = f"Вопрос: {question_text} | Ответ: {combined_text}"
 
-    geo_point = last_location_by_user.pop(sender_id, None)
-    matched_places = match_location(combined_text)
+    chat_key_str = str(chat_key)
+    chat_pk = CHAT_ID_TO_PK.get(chat_key_str)
+    if chat_pk is None:
+        chat_pk = await sync_to_async(
+            lambda: Chat.objects.filter(chat_id=chat_key_str).values_list("id", flat=True).first()
+        )()
+        if not chat_pk:
+            return
+        CHAT_ID_TO_PK[chat_key_str] = chat_pk
 
     payload = {
         "telegram_message_id": event.message.id,
-        "chat_id": chat_key,
-        "chat_title": getattr(event.chat, "title", "") if event.chat else "",
+        "chat": chat_pk,
         "author_id": sender_id,
         "author_name": author,
         "text": combined_text,
-        "category_id": CATEGORY_MAP.get(category_name, {}).get("id"),
-        "category_name": category_name,
+        "category": CATEGORY_MAP.get(category_name, {}).get("id"),
         "created_at": event.message.date.isoformat(),
-        "locations": [],
     }
-
-    # Telegram geo
-    if geo_point:
-        payload["locations"].append({
-            "place_name": "telegram_location",
-            "location": {"type": "Point", "coordinates": [geo_point["lon"], geo_point["lat"]]},
-            "source": "telegram",
-            "confidence": 1.0
-        })
-
-    # NLP geo
-    for place_name, lat, lon in matched_places:
-        place_info = LOCATION_MAP.get(place_name.lower())
-        place_id = place_info["id"] if place_info else None
-        payload["locations"].append({
-            "place_name": place_name,
-            "place_id": place_id,
-            "location": {"type": "Point", "coordinates": [lon, lat]},
-            "source": "nlp",
-            "confidence": 0.9
-        })
 
     if maybe_merge_with_previous(chat_key, sender_id, combined_text, category_name, author, payload):
         return
@@ -384,10 +401,28 @@ async def handler(event):
         "timestamp": time.time()
     }
 
+def init_client():
+    global client, API_ID, API_HASH, SESSION_NAME
+    if client is not None:
+        return client
+    if SKIP_DB_BOOTSTRAP:
+        return None
+    if API_ID is None or API_HASH is None or SESSION_NAME is None:
+        # Do not hit DB here if we're already in async context.
+        return None
+    if not (API_ID and API_HASH and SESSION_NAME):
+        return None
+    client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
+    client.add_event_handler(handler, events.NewMessage(chats=TARGET_CHATS))
+    return client
+
 # ─────────────────────────────────────────────────────────────
 # QR Login + run
 # ─────────────────────────────────────────────────────────────
 async def qr_login():
+    init_client()
+    if client is None:
+        raise RuntimeError("Telegram client is not initialized. Check API settings.")
     await client.connect()
     if await client.is_user_authorized():
         return
@@ -398,13 +433,34 @@ async def qr_login():
         except_ids=[]
     ))
     tg_url = "tg://login?token=" + base64.urlsafe_b64encode(token.token).decode()
-    print("📱 Сканируй QR:", tg_url)
+    print("📱 Сканируй QR:")
+    qr = qrcode.QRCode(border=1)
+    qr.add_data(tg_url)
+    qr.make(fit=True)
+    qr.print_ascii(invert=True)
+    print(tg_url)
     input("Нажми Enter после подтверждения...")
-
+    if await client.is_user_authorized():
+        return
+    # Если после QR всё ещё не авторизован — возможно включена 2FA.
     try:
         await client.sign_in(password=input("2FA пароль (если есть): "))
     except SessionPasswordNeededError:
         pass
+
+async def start_client():
+    init_client()
+    if client is None:
+        raise RuntimeError("Telegram client is not initialized")
+    if not await client.is_user_authorized():
+        raise RuntimeError("Telegram client not authorized")
+    await client.start()
+    print("📡 Парсер запущен")
+
+async def stop_client():
+    if client and client.is_connected():
+        await client.disconnect()
+        print("⛔ Парсер остановлен")
 
 async def ws_listener():
     uri = "ws://localhost:8000/ws/chat-updates/"
@@ -418,7 +474,7 @@ async def ws_listener():
                 
 async def main():
     await qr_login()
-    print("📡 Парсер запущен")
+    await start_client()
     await client.run_until_disconnected()
 
 if __name__ == "__main__":

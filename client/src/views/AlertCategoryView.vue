@@ -10,6 +10,9 @@ const categoryToAdd = ref({
   name: "",
   text_patterns: "",
   emoji_patterns: "",
+  ttl_minutes: 60,
+  confirm_threshold: 3,
+  deny_threshold: -3,
   enabled: true,
 });
 
@@ -40,9 +43,20 @@ async function onAddCategory() {
     name: categoryToAdd.value.name,
     text_patterns: parsePatterns(categoryToAdd.value.text_patterns),
     emoji_patterns: parsePatterns(categoryToAdd.value.emoji_patterns),
+    ttl_minutes: Number(categoryToAdd.value.ttl_minutes),
+    confirm_threshold: Number(categoryToAdd.value.confirm_threshold),
+    deny_threshold: Number(categoryToAdd.value.deny_threshold),
     enabled: categoryToAdd.value.enabled,
   });
-  categoryToAdd.value = { name: "", text_patterns: "", emoji_patterns: "", enabled: true };
+  categoryToAdd.value = {
+    name: "",
+    text_patterns: "",
+    emoji_patterns: "",
+    ttl_minutes: 60,
+    confirm_threshold: 3,
+    deny_threshold: -3,
+    enabled: true
+  };
   await fetchCategories();
 }
 
@@ -51,6 +65,9 @@ function onEditCategoryClick(cat) {
     ...cat,
     text_patterns: joinPatterns(cat.text_patterns),
     emoji_patterns: joinPatterns(cat.emoji_patterns),
+    ttl_minutes: cat.ttl_minutes ?? 60,
+    confirm_threshold: cat.confirm_threshold ?? 3,
+    deny_threshold: cat.deny_threshold ?? -3,
   };
 }
 
@@ -59,6 +76,9 @@ async function onUpdateCategoryClick() {
     name: categoryToEdit.value.name,
     text_patterns: parsePatterns(categoryToEdit.value.text_patterns),
     emoji_patterns: parsePatterns(categoryToEdit.value.emoji_patterns),
+    ttl_minutes: Number(categoryToEdit.value.ttl_minutes),
+    confirm_threshold: Number(categoryToEdit.value.confirm_threshold),
+    deny_threshold: Number(categoryToEdit.value.deny_threshold),
     enabled: categoryToEdit.value.enabled,
   });
   await fetchCategories();
@@ -102,6 +122,24 @@ onBeforeMount(() => {
             <label>Эмодзи (через запятую)</label>
           </div>
         </div>
+        <div class="col">
+          <div class="form-floating">
+            <input type="number" class="form-control" v-model="categoryToAdd.ttl_minutes" min="1" />
+            <label>TTL (мин)</label>
+          </div>
+        </div>
+        <div class="col">
+          <div class="form-floating">
+            <input type="number" class="form-control" v-model="categoryToAdd.confirm_threshold" />
+            <label>Порог подтверждения</label>
+          </div>
+        </div>
+        <div class="col">
+          <div class="form-floating">
+            <input type="number" class="form-control" v-model="categoryToAdd.deny_threshold" />
+            <label>Порог отрицания</label>
+          </div>
+        </div>
         <div class="col-auto">
           <div class="form-check">
             <input type="checkbox" class="form-check-input" v-model="categoryToAdd.enabled" id="enabledAdd">
@@ -123,6 +161,8 @@ onBeforeMount(() => {
           <div class="category-name">{{ cat.name }}</div>
           <div class="category-patterns"><strong>Text:</strong> {{ cat.text_patterns.join(", ") }}</div>
           <div class="category-patterns"><strong>Emoji:</strong> {{ cat.emoji_patterns.join(", ") }}</div>
+          <div class="category-patterns"><strong>TTL:</strong> {{ cat.ttl_minutes }} мин</div>
+          <div class="category-patterns"><strong>Пороги:</strong> {{ cat.confirm_threshold }} / {{ cat.deny_threshold }}</div>
           <div class="category-status" :class="{ off: !cat.enabled }">{{ cat.enabled ? "Включена" : "Выключена" }}</div>
         </div>
 
@@ -170,6 +210,24 @@ onBeforeMount(() => {
                 <input type="text" class="form-control" v-model="categoryToEdit.emoji_patterns"
                   placeholder="Эмодзи (через запятую)" required />
                 <label>Эмодзи (через запятую)</label>
+              </div>
+            </div>
+            <div class="col">
+              <div class="form-floating mb-3">
+                <input type="number" class="form-control" v-model="categoryToEdit.ttl_minutes" min="1" />
+                <label>TTL (мин)</label>
+              </div>
+            </div>
+            <div class="col">
+              <div class="form-floating mb-3">
+                <input type="number" class="form-control" v-model="categoryToEdit.confirm_threshold" />
+                <label>Порог подтверждения</label>
+              </div>
+            </div>
+            <div class="col">
+              <div class="form-floating mb-3">
+                <input type="number" class="form-control" v-model="categoryToEdit.deny_threshold" />
+                <label>Порог отрицания</label>
               </div>
             </div>
             <div class="col-auto">

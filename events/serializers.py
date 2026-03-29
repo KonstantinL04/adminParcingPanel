@@ -1,55 +1,83 @@
 from rest_framework import serializers
-from .models import ParsedMessage, MessageLocation, MessageRouteMatch
-from rest_framework_gis.serializers import GeoFeatureModelSerializer
-
-class MessageLocationSerializer(GeoFeatureModelSerializer):
-    telegram_message_id = serializers.IntegerField(
-        source="message.telegram_message_id",
-        read_only=True
-    )
-    author_name = serializers.CharField(
-        source="message.author_name",
-        read_only=True
-    )
-
-    class Meta:
-        model = MessageLocation
-        geo_field = "location"
-        fields = (
-            "id",
-            "telegram_message_id",
-            "author_name",
-            "place_name",
-            "source",
-            "confidence",
-        )
-    
-
-
-class MessageRouteMatchSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = MessageRouteMatch
-        fields = "__all__"
-
+from .models import ParsedMessage, RoadEvent, EventVote, EventMedia
 
 class ParsedMessageSerializer(serializers.ModelSerializer):
-    locations = MessageLocationSerializer(many=True, required=False)
-    routes = MessageRouteMatchSerializer(many=True, required=False)
+    chat_title = serializers.CharField(source="chat.title", read_only=True)
+    category_name = serializers.CharField(source="category.name", read_only=True)
 
     class Meta:
         model = ParsedMessage
-        fields = "__all__"
+        fields = [
+            "id",
+            "telegram_message_id",
+            "chat",
+            "chat_title",
+            "author_id",
+            "author_name",
+            "text",
+            "category",
+            "category_name",
+            "created_at",
+            "parsed_at",
+        ]
+
+class EventMediaSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EventMedia
+        fields = ["id", "image", "user_id", "created_at"]
+
+class EventVoteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EventVote
+        fields = ["id", "vote", "user_id", "created_at"]
+
+class RoadEventSerializer(serializers.ModelSerializer):
+    votes = EventVoteSerializer(many=True, read_only=True)
+    media = EventMediaSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = RoadEvent
+        fields = [
+            "id",
+            "source_message",
+            "location",
+            "category_id",
+            "category_code",
+            "category_label",
+            "extra_params",
+            "comment",
+            "user_id",
+            "status",
+            "source",
+            "confidence",
+            "confirmations",
+            "valid_until",
+            "created_at",
+            "last_activity_at",
+            "votes",
+            "media",
+        ]
+
+class RoadEventCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RoadEvent
+        fields = [
+            "location",
+            "category_id",
+            "category_code",
+            "category_label",
+            "extra_params",
+            "comment",
+        ]
 
     def create(self, validated_data):
-        locations = validated_data.pop("locations", [])
-        routes = validated_data.pop("routes", [])
+        request = self.context["request"]
 
-        msg = ParsedMessage.objects.create(**validated_data)
-
-        for loc in locations:
-            MessageLocation.objects.create(message=msg, **loc)
-
-        for r in routes:
-            MessageRouteMatch.objects.create(message=msg, **r)
-
-        return msg
+        return RoadEvent.objects.create(
+            **validated_data,
+            status="active",
+            source="user",
+            user_id=str(request.user.id) if request.user.is_authenticated else None,
+            confidence=0.6,
+            confirmations=1,
+        )

@@ -3,28 +3,62 @@ import pandas as pd
 import re
 from difflib import SequenceMatcher
 import joblib
+import os
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.metrics.pairwise import cosine_similarity
 from django.contrib.gis.geos import Point
+from django.db.utils import OperationalError, ProgrammingError
 from adminparcing.models import Location, Route, RoutePoint
+
+MODEL_DIR = os.path.join(os.path.dirname(__file__), "models")
+MODEL_CACHE = {}
 
 # ------------------ Загрузка модели ------------------
 try:
     vectorizer = joblib.load("adminparcing/utils/nlp/vectorizer_places.pkl")
     knn = joblib.load("adminparcing/utils/nlp/knn_places.pkl")
     print("✅ NLP модель для координат загружена!")
-except:
+except Exception:
     print("❌ Модель не найдена, нужно обучить сначала")
     vectorizer = None
     knn = None
 
+
+def clear_model_cache(chat_id=None):
+    if chat_id is None:
+        MODEL_CACHE.clear()
+    else:
+        MODEL_CACHE.pop(int(chat_id), None)
+
+
+def _load_models_for_chat(chat_id: int):
+    chat_id = int(chat_id)
+    if chat_id in MODEL_CACHE:
+        return MODEL_CACHE[chat_id]
+    vec_path = os.path.join(MODEL_DIR, f"vectorizer_places_{chat_id}.pkl")
+    knn_path = os.path.join(MODEL_DIR, f"knn_places_{chat_id}.pkl")
+    if not (os.path.exists(vec_path) and os.path.exists(knn_path)):
+        MODEL_CACHE[chat_id] = (None, None)
+        return None, None
+    try:
+        v = joblib.load(vec_path)
+        k = joblib.load(knn_path)
+        MODEL_CACHE[chat_id] = (v, k)
+        return v, k
+    except Exception:
+        MODEL_CACHE[chat_id] = (None, None)
+        return None, None
+
 # ------------------ Словарь мест ------------------
 
-def load_places():
+def load_places(chat_id=None):
     places = {}
 
-    for loc in Location.objects.all():
+    qs = Location.objects.all()
+    if chat_id is not None:
+        qs = qs.filter(chat_id=chat_id)
+    for loc in qs:
         variants = [loc.name]
 
         if isinstance(loc.synonyms, list):
@@ -39,7 +73,7 @@ def load_places():
     return places
 
 
-places_dict = load_places()
+places_dict = {}
 
 def load_routes():
     routes = []
@@ -74,7 +108,20 @@ def load_routes():
     return routes
 
 
-routes_data = load_routes()
+routes_data = []
+
+def ensure_nlp_data_loaded():
+    global places_dict, routes_data
+    if not places_dict or not routes_data:
+        try:
+            if not places_dict:
+                places_dict = load_places()
+            if not routes_data:
+                routes_data = load_routes()
+        except (OperationalError, ProgrammingError):
+            # DB is not ready (e.g. during migrations). Keep empty caches.
+            places_dict = {}
+            routes_data = []
 
 def reload_nlp_data():
     global places_dict, routes_data
@@ -90,7 +137,9 @@ area_groups = {
     "пост": ["КП", "город"],
 }
 # ------------------ Кусок маршрута ------------------
-def extract_partial_route(text: str, threshold=0.7):
+def extract_partial_route(text: str, threshold=0.7, places=None):
+    ensure_nlp_data_loaded()
+    places = places or places_dict
     text_lower = normalize_text(text)
     patterns = [
         r'от\s+([^\s]+(?:\s+[^\s]+)*)\s+до\s+([^\s]+(?:\s+[^\s]+)*)',
@@ -110,7 +159,7 @@ def extract_partial_route(text: str, threshold=0.7):
                         return group_points
                 # иначе ищем по косинусному сходству
                 best_match = max(
-                    places_dict.items(),
+                    places.items(),
                     key=lambda x: max(
                         cosine_similarity(
                             vectorizer.transform([text_value]),
@@ -146,7 +195,7 @@ def extract_partial_route(text: str, threshold=0.7):
                         partial = route_points[end_idx:start_idx + 1][::-1]
 
                     return [
-                        (p, places_dict[p]["lat"], places_dict[p]["lon"])
+                        (p, places[p]["lat"], places[p]["lon"])
                         for p in partial
                     ]
 
@@ -154,12 +203,14 @@ def extract_partial_route(text: str, threshold=0.7):
 
 
 # ------------------ Поиск отдельных мест ------------------
-def extract_possible_places(text: str, threshold=0.7):
+def extract_possible_places(text: str, threshold=0.7, places=None):
+    ensure_nlp_data_loaded()
+    places = places or places_dict
     found_places = []
     norm_text = normalize_text(text)
     text_words = re.findall(r'\b\w+\b', norm_text)
 
-    for main_place, data in places_dict.items():
+    for main_place, data in places.items():
         found = False
         for variant in data['variants']:
             variant_norm = normalize_text(variant)
@@ -181,7 +232,18 @@ def extract_possible_places(text: str, threshold=0.7):
     return found_places
 
 # ------------------ ML-предсказание ------------------
-def predict_place(text: str):
+def predict_place(text: str, chat_id=None):
+    if chat_id is not None:
+        v, k = _load_models_for_chat(chat_id)
+        if v is None or k is None:
+            return None, None
+        try:
+            text_vec = v.transform([text])
+            lat, lon = k.predict(text_vec)[0]
+            return lat, lon
+        except Exception as e:
+            print(f"❌ Ошибка предсказания координат: {e}")
+            return None, None
     if vectorizer is None or knn is None:
         return None, None
     try:
@@ -193,24 +255,21 @@ def predict_place(text: str):
         return None, None
 
 # ------------------ Основная функция ------------------
-def match_location(text: str, threshold=0.7):
+def match_location(text: str, threshold=0.9, chat_id=None):
+    ensure_nlp_data_loaded()
+    places = load_places(chat_id) if chat_id is not None else places_dict
     if not text or not text.strip():
         return []
 
     # 1️⃣ Попробовать найти кусок маршрута
-    partial_route = extract_partial_route(text, threshold)
+    partial_route = extract_partial_route(text, threshold, places=places)
     if partial_route:
         return partial_route
 
     # 2️⃣ Иначе ищем отдельные места
-    places_found = extract_possible_places(text, threshold)
+    places_found = extract_possible_places(text, threshold, places=places)
     if places_found:
         return places_found
-
-    # 3️⃣ Иначе используем ML модель
-    lat, lon = predict_place(text)
-    if lat is not None and lon is not None:
-        return [("автоопределено", lat, lon)]
 
     return []
 

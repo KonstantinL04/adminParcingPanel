@@ -17,16 +17,17 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import include, path
 from adminparcing.api import (
-    ChatViewSet, 
-    ExcludedUserViewSet, 
-    AlertCategoryViewSet, 
+    ChatViewSet,
+    ExcludedUserViewSet,
+    AlertCategoryViewSet,
+    RegionViewSet,
+    CityViewSet,
     LocationViewSet, 
     RouteViewSet, 
     SettingViewSet, 
     SettingAPIViewSet, 
-    stop_parser, 
-    start_parser, 
-    parser_status
+    ParserViewSet,
+    NlpViewSet
 )
 from rest_framework.routers import DefaultRouter
 
@@ -35,16 +36,17 @@ router = DefaultRouter()
 router.register("chats", ChatViewSet, basename="chats")
 router.register("excluded_users", ExcludedUserViewSet, basename="excluded_users")
 router.register("alert_categories", AlertCategoryViewSet, basename="alert_categories")
+router.register("regions", RegionViewSet, basename="regions")
+router.register("cities", CityViewSet, basename="cities")
 router.register("locations", LocationViewSet, basename="locations")
 router.register("routes", RouteViewSet, basename="routes")
 router.register("settings", SettingViewSet, basename="settings")
 router.register("settings_api", SettingAPIViewSet, basename="settings_api")
+router.register("parser", ParserViewSet, basename="parser")
+router.register("nlp", NlpViewSet, basename="nlp")
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include(router.urls)),
-    path("api/parser/start/", start_parser),
-    path("api/parser/stop/", stop_parser),
-    path("api/parser/status/", parser_status),
     path("api/events/", include("events.urls")),
 ]

@@ -1,8 +1,9 @@
 from django.contrib import admin
 
-from .models import ParsedMessage, MessageLocation, MessageRouteMatch
+from .models import ParsedMessage, RoadEvent, EventVote, EventMedia
 
 admin.site.register(ParsedMessage)
-admin.site.register(MessageLocation)
-admin.site.register(MessageRouteMatch)
+admin.site.register(RoadEvent)
+admin.site.register(EventVote)
+admin.site.register(EventMedia)
 

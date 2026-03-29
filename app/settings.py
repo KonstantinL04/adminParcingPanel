@@ -20,11 +20,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
-ALLOWED_HOSTS = ["*", "localhost", "127.0.0.1"]
+ALLOWED_HOSTS = ["*"]
 
-DJANGO_SECRET_KEY=os.getenv("DJANGO_SECRET_KEY"),
+SECRET_KEY = 'django-insecure-@9(n!%rjlrfz9god9pol)u$)gath+gqb5t6ryt3+_kv8@^cnhy'
+DEBUG=True
 
-DEBUG=os.getenv("DEBUG"),
 # Application definition
 
 INSTALLED_APPS = [
@@ -36,6 +36,8 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'adminparcing',
     'events',
+    'subscription',
+    'IdentityAuth',
     'django.contrib.gis',
     'rest_framework',
     'rest_framework_gis',
@@ -76,13 +78,13 @@ WSGI_APPLICATION = 'app.wsgi.application'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
 DATABASES = {
-    "default": {
-        "ENGINE": "django.contrib.gis.db.backends.postgis",
-        "NAME": os.getenv("POSTGRES_DB", "adminpanel"),
-        "USER": os.getenv("POSTGRES_USER", "admin"),
-        "PASSWORD": os.getenv("POSTGRES_PASSWORD", "admin"),
-        "HOST": os.getenv("POSTGRES_HOST", "db"),
-        "PORT": 5432,
+    'default': {
+        'ENGINE': 'django.contrib.gis.db.backends.postgis',
+        'NAME': 'postgres',
+        'USER': 'postgres',
+        'PASSWORD': '040120',
+        'HOST': 'localhost',
+        'PORT': '5432',
     }
 }
 

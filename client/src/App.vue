@@ -26,6 +26,12 @@ import { useRouter } from "vue-router";
           </router-link>
         </li>
         <li class="nav-item">
+          <router-link to="/events-map" class="nav-link">
+            <i class="bi bi-geo-alt-fill me-2"></i>
+            Карта событий
+          </router-link>
+        </li>
+        <li class="nav-item">
           <router-link to="/chats" class="nav-link">
             <i class="bi bi-chat-dots-fill me-2"></i>
             Чаты
@@ -49,6 +55,11 @@ import { useRouter } from "vue-router";
         <li class="nav-item">
           <router-link to="/routes" class="nav-link">
             <i class="bi bi-sign-turn-slight-right-fill me-2"></i> Маршруты
+          </router-link>
+        </li>
+        <li class="nav-item">
+          <router-link to="/nlp" class="nav-link">
+            <i class="bi bi-cpu-fill me-2"></i> Дообучение NLP
           </router-link>
         </li>
         <li class="nav-item">

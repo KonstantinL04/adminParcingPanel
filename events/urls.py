@@ -1,9 +1,9 @@
 from rest_framework.routers import DefaultRouter
-from .api import ParsedMessageViewSet, MessageLocationViewSet, MessageRouteViewSet
+from .api import ParsedMessageViewSet, RoadEventViewSet, EventVoteViewSet
 
 router = DefaultRouter()
 router.register("messages", ParsedMessageViewSet, basename="events-messages")
-router.register("locations", MessageLocationViewSet, basename="events-locations")
-router.register("routes", MessageRouteViewSet, basename="events-routes")
+router.register("road-events", RoadEventViewSet, basename="events-road-events")
+router.register("votes", EventVoteViewSet, basename="events-votes")
 
 urlpatterns = router.urls
