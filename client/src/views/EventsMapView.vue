@@ -6,7 +6,7 @@ import clearIcon from "@/assets/clear.png";
 import policeIcon from "@/assets/police.png";
 
 const mapContainer = ref(null);
-const mapState = ref({ map: null, ymaps: null });
+const mapState = ref({ map: null, ymaps: null, trafficControl: null });
 
 let clusterer = null;
 let updateTimer = null;
@@ -242,7 +242,19 @@ async function initMap() {
     });
 
     map.geoObjects.add(clusterer);
-    mapState.value = { map, ymaps };
+    const trafficControl = new ymaps.control.TrafficControl({
+        state: {
+            trafficShown: false,
+            providerKey: "traffic#actual",
+        },
+        options: {
+            position: { right: 12, top: 12 },
+            size: "large",
+        },
+    });
+    map.controls.add(trafficControl);
+
+    mapState.value = { map, ymaps, trafficControl };
 
     await loadEvents();
 
@@ -263,7 +275,7 @@ onUnmounted(() => {
     if (map) map.destroy();
 
     clusterer = null;
-    mapState.value = { map: null, ymaps: null };
+    mapState.value = { map: null, ymaps: null, trafficControl: null };
 });
 </script>
 
@@ -287,5 +299,14 @@ onUnmounted(() => {
     min-height: 0;
     border: 1px solid #d0d0d0;
     border-radius: 8px;
+}
+
+:deep(.ymaps-2-1-79-controls__control) {
+    transform-origin: top right;
+}
+
+:deep(.ymaps-2-1-79-controls__control .ymaps-2-1-79-traffic) {
+    transform: scale(1);
+    transform-origin: top right;
 }
 </style>

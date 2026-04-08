@@ -1,9 +1,10 @@
 from django.contrib.gis.geos import Point
+from django.contrib.gis.measure import D
 from django.utils import timezone
 from events.models import RoadEvent
 from adminparcing.services.event_status import get_ttl_minutes
 
-MAX_DISTANCE_METERS = 300
+MAX_DISTANCE_METERS = 50
 EVENT_TTL_MINUTES = 60
 
 
@@ -22,18 +23,20 @@ def process_parsed_message(parsed_message, locations):
             srid=4326
         )
 
-        # ищем существующее событие рядом
+        # Ищем существующее событие рядом ТОЛЬКО той же категории.
+        # События разных категорий должны существовать независимо.
         event = (
             RoadEvent.objects
             .filter(
                 status__in=["active", "confirmed"],
-                location__distance_lte=(point, MAX_DISTANCE_METERS)
+                category_id=category_id,
+                location__distance_lte=(point, D(m=MAX_DISTANCE_METERS))
             )
             .order_by("-last_activity_at")
             .first()
         )
 
-        if event and event.category_id == category_id:
+        if event:
             # подтверждаем существующее только если сообщение новее
             if parsed_message.created_at and parsed_message.created_at <= event.last_activity_at:
                 continue
@@ -41,12 +44,6 @@ def process_parsed_message(parsed_message, locations):
             event.confidence = min(1.0, event.confidence + 0.1)
             event.last_activity_at = parsed_message.created_at
             event.save(update_fields=["confirmations", "confidence", "last_activity_at"])
-        elif event:
-            # категория изменилась — старое событие убираем
-            event.status = "expired"
-            event.last_activity_at = timezone.now()
-            event.save(update_fields=["status", "last_activity_at"])
-            event = None
         if not event:
             # создаём новое событие
             ttl_minutes = get_ttl_minutes(category_id, category_name)

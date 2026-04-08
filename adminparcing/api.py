@@ -61,7 +61,7 @@ class LocationViewSet(mixins.ListModelMixin,
                   mixins.RetrieveModelMixin,
                   mixins.DestroyModelMixin,
                   GenericViewSet):
-    queryset = Location.objects.all()
+    queryset = Location.objects.select_related("chat", "city", "city__region").prefetch_related("chats").all()
     serializer_class = LocationSerializer
  
 class RouteViewSet(mixins.ListModelMixin,
@@ -70,7 +70,7 @@ class RouteViewSet(mixins.ListModelMixin,
                    mixins.RetrieveModelMixin,
                    mixins.DestroyModelMixin,
                    GenericViewSet):
-    queryset = Route.objects.prefetch_related("points", "points__location")
+    queryset = Route.objects.prefetch_related("chats", "points", "points__location")
 
     def get_serializer_class(self):
         if self.action in ("create", "update", "partial_update"):

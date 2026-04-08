@@ -9,6 +9,7 @@ from sklearn.neighbors import KNeighborsRegressor
 from sklearn.metrics.pairwise import cosine_similarity
 from django.contrib.gis.geos import Point
 from django.db.utils import OperationalError, ProgrammingError
+from django.db.models import Q
 from adminparcing.models import Location, Route, RoutePoint
 
 MODEL_DIR = os.path.join(os.path.dirname(__file__), "models")
@@ -55,9 +56,9 @@ def _load_models_for_chat(chat_id: int):
 def load_places(chat_id=None):
     places = {}
 
-    qs = Location.objects.all()
+    qs = Location.objects.prefetch_related("chats").all()
     if chat_id is not None:
-        qs = qs.filter(chat_id=chat_id)
+        qs = qs.filter(Q(chat_id=chat_id) | Q(chats__id=chat_id)).distinct()
     for loc in qs:
         variants = [loc.name]
 

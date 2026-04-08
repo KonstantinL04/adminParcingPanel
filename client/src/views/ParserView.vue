@@ -60,6 +60,61 @@ const activeTab = ref("messages");
 const messages = ref([]);
 const roadEvents = ref([]);
 const selectedEvent = ref(null);
+const messageFilterCategory = ref("");
+const messageFilterChat = ref("");
+const messageFilterAuthor = ref("");
+const messageFilterDateFrom = ref("");
+const messageFilterDateTo = ref("");
+const messageFilterTimeFrom = ref("");
+const messageFilterTimeTo = ref("");
+
+function toTimestamp(dateValue) {
+    const ts = new Date(dateValue || "").getTime();
+    return Number.isFinite(ts) ? ts : 0;
+}
+
+const messageCategories = computed(() => {
+    return [...new Set(messages.value.map((m) => m.category_name).filter(Boolean))];
+});
+
+const messageChats = computed(() => {
+    return [...new Set(messages.value.map((m) => m.chat_title).filter(Boolean))];
+});
+
+const sortedMessages = computed(() => {
+    return [...messages.value]
+        .filter((msg) => {
+            if (messageFilterCategory.value && msg.category_name !== messageFilterCategory.value) return false;
+            if (messageFilterChat.value && msg.chat_title !== messageFilterChat.value) return false;
+            if (
+                messageFilterAuthor.value &&
+                !(msg.author_name || "").toLowerCase().includes(messageFilterAuthor.value.toLowerCase())
+            ) return false;
+
+            const created = msg.created_at ? new Date(msg.created_at) : null;
+            const createdTs = created ? created.getTime() : NaN;
+
+            if (messageFilterDateFrom.value && Number.isFinite(createdTs)) {
+                const from = new Date(`${messageFilterDateFrom.value}T00:00:00`).getTime();
+                if (createdTs < from) return false;
+            }
+            if (messageFilterDateTo.value && Number.isFinite(createdTs)) {
+                const to = new Date(`${messageFilterDateTo.value}T23:59:59`).getTime();
+                if (createdTs > to) return false;
+            }
+
+            if ((messageFilterTimeFrom.value || messageFilterTimeTo.value) && Number.isFinite(createdTs)) {
+                const h = created.getHours().toString().padStart(2, "0");
+                const m = created.getMinutes().toString().padStart(2, "0");
+                const msgTime = `${h}:${m}`;
+                if (messageFilterTimeFrom.value && msgTime < messageFilterTimeFrom.value) return false;
+                if (messageFilterTimeTo.value && msgTime > messageFilterTimeTo.value) return false;
+            }
+            return true;
+        })
+        .sort((a, b) => toTimestamp(b.created_at) - toTimestamp(a.created_at));
+});
+
 async function fetchMessages() {
     const r = await axios.get("/api/events/messages/");
     messages.value = r.data?.results || r.data;
@@ -106,6 +161,16 @@ function timeLeft(validUntil) {
     if (diff <= 0) return "истекло";
     const mins = Math.ceil(diff / 60000);
     return `${mins} мин`;
+}
+
+function resetMessageFilters() {
+    messageFilterCategory.value = "";
+    messageFilterChat.value = "";
+    messageFilterAuthor.value = "";
+    messageFilterDateFrom.value = "";
+    messageFilterDateTo.value = "";
+    messageFilterTimeFrom.value = "";
+    messageFilterTimeTo.value = "";
 }
 
 // --- Интервалы для обновления ---
@@ -156,29 +221,34 @@ onUnmounted(() => {
 
         <!-- Контент вкладок -->
         <div v-if="activeTab === 'messages'">
-            <h5>Спаршенные сообщения</h5>
-            <table class="table table-striped table-bordered">
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Чат</th>
-                        <th>Автор</th>
-                        <th>Категория</th>
-                        <th>Текст</th>
-                        <th>Дата</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr v-for="msg in messages" :key="msg.telegram_message_id">
-                        <td>{{ msg.telegram_message_id }}</td>
-                        <td>{{ msg.chat_title }}</td>
-                        <td>{{ msg.author_name }}</td>
-                        <td>{{ msg.category_name }}</td>
-                        <td>{{ msg.text }}</td>
-                        <td>{{ msg.created_at }}</td>
-                    </tr>
-                </tbody>
-            </table>
+            <div class="d-flex align-items-center justify-content-between gap-2">
+                <h5 class="mb-0">Спаршенные сообщения</h5>
+                <button
+                    class="btn btn-outline-secondary btn-sm"
+                    data-bs-toggle="modal"
+                    data-bs-target="#messageFilterModal"
+                >
+                    Фильтр
+                </button>
+            </div>
+            <div v-if="!sortedMessages.length" class="text-muted">Сообщений пока нет</div>
+
+            <div v-else class="mt-3">
+                <div v-for="msg in sortedMessages" :key="msg.telegram_message_id" class="message-item">
+                    <div class="message-head">
+                        <div class="message-chat">{{ msg.chat_title || "Без чата" }}</div>
+                        <div class="message-date">{{ formatDate(msg.created_at) }}</div>
+                    </div>
+
+                    <div class="message-body">{{ msg.text || "-" }}</div>
+
+                    <div class="message-meta">
+                        <span><b>ID:</b> {{ msg.telegram_message_id }}</span>
+                        <span><b>Автор:</b> {{ msg.author_name || "-" }}</span>
+                        <span><b>Категория:</b> {{ msg.category_name || "-" }}</span>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div v-if="activeTab === 'road-events'">
@@ -256,11 +326,120 @@ onUnmounted(() => {
                 </div>
             </div>
         </div>
+
+        <!-- Message filter modal -->
+        <div class="modal fade" id="messageFilterModal" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Фильтрация сообщений</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-2">
+                            <label class="form-label">Категория</label>
+                            <select class="form-select" v-model="messageFilterCategory">
+                                <option value="">Все категории</option>
+                                <option v-for="cat in messageCategories" :key="cat" :value="cat">{{ cat }}</option>
+                            </select>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label">Чат</label>
+                            <select class="form-select" v-model="messageFilterChat">
+                                <option value="">Все чаты</option>
+                                <option v-for="chat in messageChats" :key="chat" :value="chat">{{ chat }}</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="form-label">Автор</label>
+                            <input
+                                v-model="messageFilterAuthor"
+                                type="text"
+                                class="form-control"
+                                placeholder="Введите имя автора"
+                            />
+                        </div>
+                        <div class="row g-2 mt-1">
+                            <div class="col-6">
+                                <label class="form-label">Дата с</label>
+                                <input v-model="messageFilterDateFrom" type="date" class="form-control" />
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label">Дата по</label>
+                                <input v-model="messageFilterDateTo" type="date" class="form-control" />
+                            </div>
+                        </div>
+                        <div class="row g-2 mt-1">
+                            <div class="col-6">
+                                <label class="form-label">Время с</label>
+                                <input v-model="messageFilterTimeFrom" type="time" class="form-control" />
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label">Время по</label>
+                                <input v-model="messageFilterTimeTo" type="time" class="form-control" />
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" @click="resetMessageFilters">
+                            Сбросить
+                        </button>
+                        <button type="button" class="btn btn-primary" data-bs-dismiss="modal">
+                            Применить
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </template>
 
 <style scoped>
 .table {
     font-size: 0.9rem;
+}
+
+.message-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    padding: 0.7rem 0.85rem;
+    margin: 0.55rem 0;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    background: #fff;
+}
+
+.message-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 1rem;
+}
+
+.message-chat {
+    font-weight: 600;
+    font-size: 1rem;
+}
+
+.message-date {
+    font-size: 0.85rem;
+    color: #6c757d;
+    white-space: nowrap;
+}
+
+.message-body {
+    font-size: 0.95rem;
+    line-height: 1.3;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.message-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.9rem;
+    color: #495057;
+    font-size: 0.85rem;
 }
 </style>

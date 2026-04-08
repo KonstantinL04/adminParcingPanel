@@ -64,8 +64,15 @@ class Location(models.Model):
     synonyms = models.JSONField(default=list)
     chat = models.ForeignKey(
         Chat,
+        null=True,
+        blank=True,
         on_delete=models.PROTECT,
         related_name="locations"
+    )
+    chats = models.ManyToManyField(
+        Chat,
+        blank=True,
+        related_name="locations_multi"
     )
     city = models.ForeignKey(
         City,
@@ -81,6 +88,11 @@ class Location(models.Model):
 # ✔ Маршруты
 class Route(models.Model):
     name = models.CharField(max_length=255, unique=True)
+    chats = models.ManyToManyField(
+        Chat,
+        blank=True,
+        related_name="routes"
+    )
 
     start_point = models.ForeignKey(
         Location,
