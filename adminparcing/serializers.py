@@ -1,13 +1,26 @@
 from rest_framework import serializers
 from adminparcing.models import Chat, ExcludedUser, AlertCategory, Region, City, Location, Route, RoutePoint, Setting, SettingAPI
 from rest_framework_gis.serializers import GeoFeatureModelSerializer
+import json
 import re
 from django.db import IntegrityError, transaction
 
 class ChatSerializer(serializers.ModelSerializer):
+    region_name = serializers.CharField(source="region.name", read_only=True)
+    city_name = serializers.CharField(source="city.name", read_only=True)
+
     class Meta:
         model = Chat
-        fields = "__all__"
+        fields = (
+            "id",
+            "title",
+            "chat_id",
+            "enabled",
+            "region",
+            "region_name",
+            "city",
+            "city_name",
+        )
 
 class ExcludedUserSerializer(serializers.ModelSerializer):
     class Meta:
@@ -20,6 +33,7 @@ class AlertCategorySerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "name",
+            "image",
             "text_patterns",
             "emoji_patterns",
             "ttl_minutes",
@@ -45,9 +59,23 @@ class AlertCategorySerializer(serializers.ModelSerializer):
         return value
 
 class RegionSerializer(serializers.ModelSerializer):
+    has_boundary = serializers.SerializerMethodField()
+    boundary_geojson = serializers.SerializerMethodField()
+
+    def get_has_boundary(self, obj):
+        return bool(obj.boundary)
+
+    def get_boundary_geojson(self, obj):
+        if not obj.boundary:
+            return None
+        try:
+            return json.loads(obj.boundary.geojson)
+        except Exception:
+            return None
+
     class Meta:
         model = Region
-        fields = ("id", "name")
+        fields = ("id", "name", "has_boundary", "boundary_geojson")
 
 class CitySerializer(serializers.ModelSerializer):
     region_name = serializers.CharField(source="region.name", read_only=True)
@@ -81,6 +109,7 @@ class LocationSerializer(GeoFeatureModelSerializer):
         geo_field = "location"
         fields = (
             "id",
+            "created_at",
             "name",
             "synonyms",
             "chat",

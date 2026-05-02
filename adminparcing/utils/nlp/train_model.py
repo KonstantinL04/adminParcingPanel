@@ -19,6 +19,8 @@ def _build_dataset(chat_id: int):
     expanded_coords = []
 
     for loc in qs:
+        if not loc.location:
+            continue
         main_place = str(loc.name)
         synonyms = loc.synonyms if isinstance(loc.synonyms, list) else []
 

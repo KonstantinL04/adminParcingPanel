@@ -36,8 +36,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'adminparcing',
     'events',
-    'subscription',
-    'IdentityAuth',
+    'accounts',
     'django.contrib.gis',
     'rest_framework',
     'rest_framework_gis',
@@ -116,6 +115,19 @@ CHANNEL_LAYERS = {
     },
 }
 
+AUTHENTICATION_BACKENDS = [
+    "accounts.auth_backends.IdentityUserBackend",
+]
+
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework.authentication.SessionAuthentication",
+    ],
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
+    ],
+}
+
 
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
@@ -133,6 +145,8 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = 'static/'
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
@@ -142,4 +156,3 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 GDAL_LIBRARY_PATH = "/opt/homebrew/opt/gdal/lib/libgdal.dylib"
 GEOS_LIBRARY_PATH = "/opt/homebrew/opt/geos/lib/libgeos_c.dylib"
 SECRET_KEY_ENCRYPTION = "FSDKmYGoX9ILGMPrRwt4RJIZOcYJ2rSrNrxgJqVB7lE="
-

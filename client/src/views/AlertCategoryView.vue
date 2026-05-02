@@ -15,8 +15,12 @@ const categoryToAdd = ref({
   deny_threshold: -3,
   enabled: true,
 });
+const categoryImageToAdd = ref(null);
+const addImagePreview = ref("");
 
 const categoryToEdit = ref({});
+const categoryImageToEdit = ref(null);
+const editImagePreview = ref("");
 
 function parsePatterns(str) {
   return str
@@ -29,6 +33,27 @@ function joinPatterns(arr) {
   return arr.join(", ");
 }
 
+function resolveImageUrl(path) {
+  if (!path) return "";
+  if (path.startsWith("http://") || path.startsWith("https://")) return path;
+  return path.startsWith("/") ? path : `/${path}`;
+}
+
+function buildCategoryFormData(source, imageFile) {
+  const fd = new FormData();
+  fd.append("name", source.name);
+  fd.append("text_patterns", JSON.stringify(parsePatterns(source.text_patterns)));
+  fd.append("emoji_patterns", JSON.stringify(parsePatterns(source.emoji_patterns)));
+  fd.append("ttl_minutes", String(Number(source.ttl_minutes)));
+  fd.append("confirm_threshold", String(Number(source.confirm_threshold)));
+  fd.append("deny_threshold", String(Number(source.deny_threshold)));
+  fd.append("enabled", source.enabled ? "true" : "false");
+  if (imageFile) {
+    fd.append("image", imageFile);
+  }
+  return fd;
+}
+
 async function fetchCategories() {
   loading.value = true;
   const r = await axios.get("/api/alert_categories/");
@@ -39,15 +64,8 @@ async function fetchCategories() {
   loading.value = false;
 }
 async function onAddCategory() {
-  await axios.post("/api/alert_categories/", {
-    name: categoryToAdd.value.name,
-    text_patterns: parsePatterns(categoryToAdd.value.text_patterns),
-    emoji_patterns: parsePatterns(categoryToAdd.value.emoji_patterns),
-    ttl_minutes: Number(categoryToAdd.value.ttl_minutes),
-    confirm_threshold: Number(categoryToAdd.value.confirm_threshold),
-    deny_threshold: Number(categoryToAdd.value.deny_threshold),
-    enabled: categoryToAdd.value.enabled,
-  });
+  const formData = buildCategoryFormData(categoryToAdd.value, categoryImageToAdd.value);
+  await axios.post("/api/alert_categories/", formData);
   categoryToAdd.value = {
     name: "",
     text_patterns: "",
@@ -57,6 +75,8 @@ async function onAddCategory() {
     deny_threshold: -3,
     enabled: true
   };
+  categoryImageToAdd.value = null;
+  addImagePreview.value = "";
   await fetchCategories();
 }
 
@@ -69,24 +89,34 @@ function onEditCategoryClick(cat) {
     confirm_threshold: cat.confirm_threshold ?? 3,
     deny_threshold: cat.deny_threshold ?? -3,
   };
+  categoryImageToEdit.value = null;
+  editImagePreview.value = resolveImageUrl(cat.image);
 }
 
 async function onUpdateCategoryClick() {
-  await axios.put(`/api/alert_categories/${categoryToEdit.value.id}/`, {
-    name: categoryToEdit.value.name,
-    text_patterns: parsePatterns(categoryToEdit.value.text_patterns),
-    emoji_patterns: parsePatterns(categoryToEdit.value.emoji_patterns),
-    ttl_minutes: Number(categoryToEdit.value.ttl_minutes),
-    confirm_threshold: Number(categoryToEdit.value.confirm_threshold),
-    deny_threshold: Number(categoryToEdit.value.deny_threshold),
-    enabled: categoryToEdit.value.enabled,
-  });
+  const formData = buildCategoryFormData(categoryToEdit.value, categoryImageToEdit.value);
+  await axios.put(`/api/alert_categories/${categoryToEdit.value.id}/`, formData);
+  categoryImageToEdit.value = null;
   await fetchCategories();
 }
 
 async function onRemoveCategory(cat) {
   await axios.delete(`/api/alert_categories/${cat.id}/`);
   await fetchCategories();
+}
+
+function onAddImageChange(event) {
+  const file = event.target.files?.[0] || null;
+  categoryImageToAdd.value = file;
+  addImagePreview.value = file ? URL.createObjectURL(file) : "";
+}
+
+function onEditImageChange(event) {
+  const file = event.target.files?.[0] || null;
+  categoryImageToEdit.value = file;
+  if (file) {
+    editImagePreview.value = URL.createObjectURL(file);
+  }
 }
 
 onBeforeMount(() => {
@@ -146,6 +176,12 @@ onBeforeMount(() => {
             <label class="form-check-label" for="enabledAdd">Включён</label>
           </div>
         </div>
+        <div class="col">
+          <input class="form-control" type="file" accept="image/*" @change="onAddImageChange" />
+        </div>
+        <div class="col-auto" v-if="addImagePreview">
+          <img :src="addImagePreview" alt="preview" class="category-thumb" />
+        </div>
         <div class="col-auto">
           <button class="btn btn-primary">Добавить</button>
         </div>
@@ -158,6 +194,7 @@ onBeforeMount(() => {
       <div v-for="cat in categories" :key="cat.id" class="category-item">
 
         <div class="category-info">
+          <img v-if="cat.image" :src="resolveImageUrl(cat.image)" alt="category" class="category-thumb mb-2" />
           <div class="category-name">{{ cat.name }}</div>
           <div class="category-patterns"><strong>Text:</strong> {{ cat.text_patterns.join(", ") }}</div>
           <div class="category-patterns"><strong>Emoji:</strong> {{ cat.emoji_patterns.join(", ") }}</div>
@@ -236,6 +273,11 @@ onBeforeMount(() => {
                 <label class="form-check-label" for="enabledAdd">Включён</label>
               </div>
             </div>
+            <div class="col">
+              <label class="form-label">Изображение</label>
+              <input class="form-control mb-2" type="file" accept="image/*" @change="onEditImageChange" />
+              <img v-if="editImagePreview" :src="editImagePreview" alt="category-preview" class="category-thumb" />
+            </div>
             
           </div>
 
@@ -287,5 +329,13 @@ onBeforeMount(() => {
 .category-actions {
   display: flex;
   gap: .5rem;
+}
+
+.category-thumb {
+  width: 44px;
+  height: 44px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid #ddd;
 }
 </style>

@@ -60,6 +60,8 @@ def load_places(chat_id=None):
     if chat_id is not None:
         qs = qs.filter(Q(chat_id=chat_id) | Q(chats__id=chat_id)).distinct()
     for loc in qs:
+        if not loc.location:
+            continue
         variants = [loc.name]
 
         if isinstance(loc.synonyms, list):

@@ -1,16 +1,13 @@
 <script setup>
 import axios from "axios";
-import { ref, onBeforeMount, onMounted, onUnmounted, nextTick } from "vue";
+import { computed, ref, onBeforeMount, onMounted, onUnmounted, nextTick } from "vue";
 import Cookies from "js-cookie";
 
 const locations = ref([]);
 const loading = ref(false);
 const chats = ref([]);
-const regions = ref([]);
-const cities = ref([]);
-const filteredRegions = ref([]);
-const filteredCities = ref([]);
-const filteredCitiesEdit = ref([]);
+const locationChatFilters = ref([]);
+const appliedLocationChatFilters = ref([]);
 
 const locationToAdd = ref({
   name: "",
@@ -18,8 +15,6 @@ const locationToAdd = ref({
   lon: "",
   synonyms: "",
   chats: [],
-  region: "",
-  city: "",
 });
 
 const locationToEdit = ref({});
@@ -28,6 +23,7 @@ const mapState = ref({ map: null, marker: null });
 const showAddMap = ref(false);
 const editMapContainer = ref(null);
 const editMapState = ref({ map: null, marker: null });
+const editMapKey = ref(0);
 const previewMapContainer = ref(null);
 const previewMapState = ref({ map: null, marker: null });
 const locationToView = ref({ name: "", lat: null, lon: null });
@@ -37,6 +33,8 @@ let onEditModalHidden = null;
 let previewModalEl = null;
 let onPreviewModalShown = null;
 let onPreviewModalHidden = null;
+let editModalGeneration = 0;
+let previewModalGeneration = 0;
 const DEFAULT_CENTER = [52.2896, 104.2806]; // Иркутск по умолчанию
 
 function toFiniteCoord(value) {
@@ -49,6 +47,13 @@ function toFiniteCoord(value) {
     return Number.isFinite(n) ? n : NaN;
   }
   return NaN;
+}
+
+function hasValidLatLon(lat, lon) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false;
+  // [0, 0] трактуем как "координаты не заданы"
+  if (Math.abs(lat) < 0.000001 && Math.abs(lon) < 0.000001) return false;
+  return true;
 }
 
 function loadYandexMaps() {
@@ -137,15 +142,8 @@ function ensureEditMarker(coords) {
   if (!Array.isArray(coords) || coords.length !== 2) return;
   if (!Number.isFinite(coords[0]) || !Number.isFinite(coords[1])) return;
 
-  if (marker) {
-    marker.geometry.setCoordinates(coords);
-    return;
-  }
-
-  const newMarker = new window.ymaps.Placemark(coords, {}, { draggable: true });
-  map.geoObjects.add(newMarker);
-  bindDraggableMarker(newMarker, locationToEdit);
-  editMapState.value = { map, marker: newMarker };
+  if (!marker) return;
+  marker.geometry.setCoordinates(coords);
 }
 
 function syncEditMapToForm() {
@@ -154,7 +152,13 @@ function syncEditMapToForm() {
 
   const lat = toFiniteCoord(locationToEdit.value.lat);
   const lon = toFiniteCoord(locationToEdit.value.lon);
-  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+  if (!hasValidLatLon(lat, lon)) {
+    if (editMapState.value.marker) {
+      editMapState.value.marker.geometry.setCoordinates(DEFAULT_CENTER);
+    }
+    map.setCenter(DEFAULT_CENTER, 12);
+    return;
+  }
 
   const coords = [lat, lon];
   ensureEditMarker(coords);
@@ -172,6 +176,19 @@ async function initEditMap() {
       controls: ["zoomControl"],
     });
 
+    // Создаем маркер один раз и дальше только двигаем.
+    // Это помогает избежать сбоев add/remove в Safari.
+    const marker = new ymaps.Placemark(
+      DEFAULT_CENTER,
+      {},
+      {
+        draggable: true,
+        preset: "islands#blueIcon",
+      }
+    );
+    map.geoObjects.add(marker);
+    bindDraggableMarker(marker, locationToEdit);
+
     map.events.add("click", (e) => {
       const coords = e.get("coords");
       if (!Array.isArray(coords) || coords.length !== 2) return;
@@ -181,7 +198,7 @@ async function initEditMap() {
       locationToEdit.value.lon = coords[1].toFixed(6);
     });
 
-    editMapState.value = { map, marker: null };
+    editMapState.value = { map, marker };
   } catch (e) {
     console.error("Failed to init edit Yandex Map:", e);
   }
@@ -222,7 +239,7 @@ async function initPreviewMap() {
     const ymaps = await loadYandexMaps();
     const lat = Number(locationToView.value.lat);
     const lon = Number(locationToView.value.lon);
-    const center = Number.isFinite(lat) && Number.isFinite(lon) ? [lat, lon] : DEFAULT_CENTER;
+    const center = hasValidLatLon(lat, lon) ? [lat, lon] : DEFAULT_CENTER;
     const map = new ymaps.Map(previewMapContainer.value, {
       center,
       zoom: 15,
@@ -238,7 +255,10 @@ function syncPreviewMapToLocation() {
   const { map, marker } = previewMapState.value;
   const lat = Number(locationToView.value.lat);
   const lon = Number(locationToView.value.lon);
-  if (!map || !Number.isFinite(lat) || !Number.isFinite(lon)) return;
+  if (!map || !hasValidLatLon(lat, lon)) {
+    if (map) map.setCenter(DEFAULT_CENTER, 12);
+    return;
+  }
 
   const coords = [lat, lon];
   if (marker) {
@@ -260,32 +280,63 @@ async function fetchLocations() {
   loading.value = false;
 }
 
-async function fetchGeoRefs() {
-  const [chatRes, rRes, cityRes] = await Promise.all([
-    axios.get("/api/chats/"),
-    axios.get("/api/regions/"),
-    axios.get("/api/cities/")
-  ]);
-  chats.value = chatRes.data || [];
-  regions.value = rRes.data || [];
-  cities.value = cityRes.data || [];
-  syncRegionCityOptions();
+function getLocationChatIds(loc) {
+  const ids = [];
+  const chat = Number(loc?.properties?.chat);
+  if (Number.isFinite(chat)) ids.push(chat);
+  const extra = Array.isArray(loc?.properties?.chats) ? loc.properties.chats : [];
+  for (const id of extra) {
+    const n = Number(id);
+    if (Number.isFinite(n)) ids.push(n);
+  }
+  return [...new Set(ids)];
 }
 
-function syncRegionCityOptions() {
-  filteredRegions.value = regions.value || [];
-  if (locationToAdd.value.region) {
-    filteredCities.value = cities.value.filter(
-      c => c.region === parseInt(locationToAdd.value.region)
-    );
-  } else {
-    filteredCities.value = [];
+function hasCoordinates(loc) {
+  const lat = toFiniteCoord(loc?.geometry?.coordinates?.[1]);
+  const lon = toFiniteCoord(loc?.geometry?.coordinates?.[0]);
+  return hasValidLatLon(lat, lon);
+}
+
+const visibleLocations = computed(() => {
+  const selected = new Set((appliedLocationChatFilters.value || []).map((id) => Number(id)));
+  const byChat = (locations.value || []).filter((loc) => {
+    if (!selected.size) return true;
+    const ids = getLocationChatIds(loc);
+    return ids.some((id) => selected.has(id));
+  });
+
+  return [...byChat].sort((a, b) => {
+    const aTime = Date.parse(a?.properties?.created_at || "");
+    const bTime = Date.parse(b?.properties?.created_at || "");
+    if (Number.isFinite(aTime) && Number.isFinite(bTime) && aTime !== bTime) {
+      return bTime - aTime;
+    }
+    return Number(b?.id || 0) - Number(a?.id || 0);
+  });
+});
+
+function applyLocationFilters() {
+  appliedLocationChatFilters.value = [...locationChatFilters.value];
+}
+
+function applyLocationFiltersAndClose() {
+  applyLocationFilters();
+  const modalEl = document.getElementById("locationFilterModal");
+  if (modalEl) {
+    const bsModal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+    bsModal.hide();
   }
 }
 
-function onAddRegionChange() {
-  locationToAdd.value.city = "";
-  syncRegionCityOptions();
+function resetLocationFilters() {
+  locationChatFilters.value = [];
+  appliedLocationChatFilters.value = [];
+}
+
+async function fetchGeoRefs() {
+  const [chatRes] = await Promise.all([axios.get("/api/chats/")]);
+  chats.value = chatRes.data || [];
 }
 
 async function onAddLocation() {
@@ -311,55 +362,47 @@ async function onAddLocation() {
         ? locationToAdd.value.synonyms.split(",").map(s => s.trim())
         : [],
       chats: locationToAdd.value.chats.map(id => parseInt(id)),
-      city: locationToAdd.value.city ? parseInt(locationToAdd.value.city) : null,
     }
   });
 
-  locationToAdd.value = { name: "", lat: "", lon: "", synonyms: "", chats: [], region: "", city: "" };
+  locationToAdd.value = { name: "", lat: "", lon: "", synonyms: "", chats: [] };
   await fetchLocations();
 }
 
 function onEditLocationClick(loc) {
-  const regionId = loc.properties.region_id || "";
   const lat = toFiniteCoord(loc?.geometry?.coordinates?.[1]);
   const lon = toFiniteCoord(loc?.geometry?.coordinates?.[0]);
+  const hasCoords = hasValidLatLon(lat, lon);
   locationToEdit.value = {
     id: loc.id,
     name: loc.properties.name,
-    lat: Number.isFinite(lat) ? lat.toFixed(6) : "",
-    lon: Number.isFinite(lon) ? lon.toFixed(6) : "",
+    lat: hasCoords ? lat.toFixed(6) : "",
+    lon: hasCoords ? lon.toFixed(6) : "",
     synonyms: loc.properties.synonyms.join(", "),
     chats: loc.properties.chats || (loc.properties.chat ? [loc.properties.chat] : []),
-    region: regionId,
-    city: loc.properties.city || "",
   };
-  if (regionId) {
-    filteredCitiesEdit.value = cities.value.filter(
-      c => c.region === parseInt(regionId)
-    );
-  } else {
-    filteredCitiesEdit.value = [];
-  }
 
   syncEditMapToForm();
 }
 
 async function onUpdateLocationClick() {
+  const lat = toFiniteCoord(locationToEdit.value.lat);
+  const lon = toFiniteCoord(locationToEdit.value.lon);
+  const geometry = hasValidLatLon(lat, lon)
+    ? {
+        type: "Point",
+        coordinates: [lon, lat],
+      }
+    : null;
+
   await axios.put(`/api/locations/${locationToEdit.value.id}/`, {
-    geometry: {
-      type: "Point",
-      coordinates: [
-        parseFloat(locationToEdit.value.lon),
-        parseFloat(locationToEdit.value.lat)
-      ]
-    },
+    geometry,
     properties: {
       name: locationToEdit.value.name,
       synonyms: locationToEdit.value.synonyms
         ? locationToEdit.value.synonyms.split(",").map(s => s.trim())
         : [],
       chats: (locationToEdit.value.chats || []).map(id => parseInt(id)),
-      city: locationToEdit.value.city ? parseInt(locationToEdit.value.city) : null,
     }
   });
 
@@ -374,7 +417,7 @@ async function onRemoveLocation(loc) {
 function onViewLocationOnMap(loc) {
   const lat = toFiniteCoord(loc?.geometry?.coordinates?.[1]);
   const lon = toFiniteCoord(loc?.geometry?.coordinates?.[0]);
-  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+  if (!hasValidLatLon(lat, lon)) return;
   locationToView.value = {
     name: loc?.properties?.name || "Место",
     lat,
@@ -400,27 +443,42 @@ onMounted(() => {
   editModalEl = document.getElementById("editLocationModal");
   previewModalEl = document.getElementById("viewLocationMapModal");
   onEditModalShown = async () => {
-    destroyEditMap();
+    editModalGeneration += 1;
+    const currentGeneration = editModalGeneration;
+    editMapKey.value += 1;
     await nextTick();
+    if (currentGeneration !== editModalGeneration) return;
+    destroyEditMap();
     await initEditMap();
+    if (currentGeneration !== editModalGeneration) return;
     syncEditMapToForm();
-    setTimeout(() => syncEditMapToForm(), 120);
     if (editMapState.value.map) {
-      setTimeout(() => editMapState.value.map.container.fitToViewport(), 60);
+      editMapState.value.map.container.fitToViewport();
     }
   };
   onEditModalHidden = () => {
+    // Сразу инвалидируем все pending async шаги текущего открытия.
+    editModalGeneration += 1;
     destroyEditMap();
   };
   onPreviewModalShown = async () => {
+    previewModalGeneration += 1;
+    const currentGeneration = previewModalGeneration;
     destroyPreviewMap();
     await nextTick();
+    if (currentGeneration !== previewModalGeneration) return;
     await initPreviewMap();
+    if (currentGeneration !== previewModalGeneration) return;
     syncPreviewMapToLocation();
     setTimeout(() => syncPreviewMapToLocation(), 120);
   };
   onPreviewModalHidden = () => {
-    destroyPreviewMap();
+    const hiddenGeneration = previewModalGeneration;
+    setTimeout(() => {
+      if (hiddenGeneration === previewModalGeneration) {
+        destroyPreviewMap();
+      }
+    }, 0);
   };
 
   if (editModalEl) {
@@ -486,22 +544,6 @@ onUnmounted(() => {
           </div>
 
           <div class="col-6 col-md-3 col-lg-2">
-            <label class="form-label">Область</label>
-            <select class="form-select" v-model="locationToAdd.region" @change="onAddRegionChange" required>
-              <option value="">—</option>
-              <option v-for="r in filteredRegions" :key="r.id" :value="r.id">{{ r.name }}</option>
-            </select>
-          </div>
-
-          <div class="col-6 col-md-3 col-lg-2">
-            <label class="form-label">Город</label>
-            <select class="form-select" v-model="locationToAdd.city" required>
-              <option value="">—</option>
-              <option v-for="c in filteredCities" :key="c.id" :value="c.id">{{ c.name }}</option>
-            </select>
-          </div>
-
-          <div class="col-6 col-md-3 col-lg-2">
             <label class="form-label">Широта (lat)</label>
             <input type="number" step="0.000001" class="form-control" v-model="locationToAdd.lat" readonly required />
           </div>
@@ -551,15 +593,31 @@ onUnmounted(() => {
 
     <!-- List -->
     <div v-else class="mt-3">
-      <div v-for="loc in locations" :key="loc.id" class="item-box">
+      <div class="d-flex align-items-center justify-content-between gap-2 mb-3">
+        <div class="text-muted">
+          <template v-if="appliedLocationChatFilters.length">
+            Выбрано чатов: {{ appliedLocationChatFilters.length }}
+          </template>
+          <template v-else>
+            Показаны места из всех чатов
+          </template>
+        </div>
+        <button
+          class="btn btn-outline-secondary btn-sm"
+          data-bs-toggle="modal"
+          data-bs-target="#locationFilterModal"
+        >
+          Фильтр по чатам
+        </button>
+      </div>
+
+      <div v-for="loc in visibleLocations" :key="loc.id" class="item-box">
 
         <div>
           <strong>{{ loc.properties.name }}</strong>
           <br>
           <small class="text-muted">
-            {{ (loc.properties.chat_titles || []).join(", ") || loc.properties.chat_title || "-" }} /
-            {{ loc.properties.region_name || "-" }} /
-            {{ loc.properties.city_name || "-" }}
+            {{ (loc.properties.chat_titles || []).join(", ") || loc.properties.chat_title || "-" }}
           </small>
           <br>
           <small class="text-muted">
@@ -571,10 +629,11 @@ onUnmounted(() => {
 
         <div class="item-actions">
           <button
-            class="btn btn-outline-primary btn-sm"
+            class="btn btn-outline-primary btn-sm map-preview-btn"
             data-bs-toggle="modal"
             data-bs-target="#viewLocationMapModal"
             @click="openPreviewModal(loc)"
+            :disabled="!hasCoordinates(loc)"
           >
             <i class="bi bi-geo-alt"></i> Посмотреть на карте
           </button>
@@ -588,6 +647,42 @@ onUnmounted(() => {
           </button>
         </div>
 
+      </div>
+    </div>
+
+    <!-- Filter modal -->
+    <div class="modal fade" id="locationFilterModal" tabindex="-1">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Фильтрация словаря мест</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <label class="form-label mb-2">Чаты</label>
+            <div class="chat-checkboxes">
+              <div class="form-check chat-check-item" v-for="c in chats" :key="`filter-chat-${c.id}`">
+                <input
+                  class="form-check-input"
+                  type="checkbox"
+                  :id="`filter-chat-${c.id}`"
+                  :value="c.id"
+                  v-model="locationChatFilters"
+                />
+                <label class="form-check-label" :for="`filter-chat-${c.id}`">{{ c.title }}</label>
+              </div>
+            </div>
+            <small class="text-muted d-block mt-2">Если ничего не выбрано, показываются все места.</small>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline-secondary btn-sm" @click="resetLocationFilters">
+              Сбросить
+            </button>
+            <button type="button" class="btn btn-primary btn-sm" @click="applyLocationFiltersAndClose">
+              Применить
+            </button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -646,22 +741,6 @@ onUnmounted(() => {
             </div>
 
             <div class="form-floating mb-2">
-              <select class="form-select" v-model="locationToEdit.region" disabled>
-                <option value="">—</option>
-                <option v-for="r in regions" :key="r.id" :value="r.id">{{ r.name }}</option>
-              </select>
-              <label>Область</label>
-            </div>
-
-            <div class="form-floating mb-2">
-              <select class="form-select" v-model="locationToEdit.city">
-                <option value="">—</option>
-                <option v-for="c in filteredCitiesEdit" :key="c.id" :value="c.id">{{ c.name }}</option>
-              </select>
-              <label>Город</label>
-            </div>
-
-            <div class="form-floating mb-2">
               <input type="number" step="0.000001" class="form-control" v-model="locationToEdit.lat" />
               <label>Широта (lat)</label>
             </div>
@@ -672,7 +751,7 @@ onUnmounted(() => {
             </div>
 
             <div class="mt-3">
-              <div class="map-box map-box-edit" ref="editMapContainer"></div>
+              <div :key="editMapKey" class="map-box map-box-edit" ref="editMapContainer"></div>
               <small class="text-muted">Кликните по карте или перетащите маркер, чтобы изменить координаты.</small>
             </div>
 
@@ -761,5 +840,12 @@ onUnmounted(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.map-preview-btn:disabled {
+  background-color: #9aa0a6;
+  border-color: #9aa0a6;
+  color: #fff;
+  opacity: 1;
 }
 </style>

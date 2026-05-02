@@ -8,7 +8,11 @@ import Cookies from "js-cookie";
 
 const chats = ref([]);
 const loading = ref(false);
-const chatToAdd = ref({ title: "", chat_id: "", enabled: true });
+const regions = ref([]);
+const cities = ref([]);
+const filteredCitiesAdd = ref([]);
+const filteredCitiesEdit = ref([]);
+const chatToAdd = ref({ title: "", chat_id: "", enabled: true, region: "", city: "" });
 const chatToEdit = ref({});
 
 async function fetchChats() {
@@ -18,10 +22,45 @@ async function fetchChats() {
     loading.value = false;
 }
 
+async function fetchGeoRefs() {
+    const [regionsRes, citiesRes] = await Promise.all([
+        axios.get("/api/regions/"),
+        axios.get("/api/cities/"),
+    ]);
+    regions.value = regionsRes.data || [];
+    cities.value = citiesRes.data || [];
+    syncAddCities();
+}
+
+function syncAddCities() {
+    const regionId = Number(chatToAdd.value.region);
+    filteredCitiesAdd.value = Number.isFinite(regionId) && regionId
+        ? cities.value.filter((c) => c.region === regionId)
+        : [];
+    if (!filteredCitiesAdd.value.find((c) => c.id === Number(chatToAdd.value.city))) {
+        chatToAdd.value.city = "";
+    }
+}
+
+function syncEditCities() {
+    const regionId = Number(chatToEdit.value.region);
+    filteredCitiesEdit.value = Number.isFinite(regionId) && regionId
+        ? cities.value.filter((c) => c.region === regionId)
+        : [];
+    if (!filteredCitiesEdit.value.find((c) => c.id === Number(chatToEdit.value.city))) {
+        chatToEdit.value.city = "";
+    }
+}
+
 // Добавление чата
 async function onAddChat() {
-    await axios.post("/api/chats/", chatToAdd.value);
-    chatToAdd.value = { title: "", chat_id: "", enabled: true };
+    await axios.post("/api/chats/", {
+        ...chatToAdd.value,
+        region: chatToAdd.value.region ? Number(chatToAdd.value.region) : null,
+        city: chatToAdd.value.city ? Number(chatToAdd.value.city) : null,
+    });
+    chatToAdd.value = { title: "", chat_id: "", enabled: true, region: "", city: "" };
+    filteredCitiesAdd.value = [];
     await fetchChats();
 }
 
@@ -33,17 +72,27 @@ async function onRemoveChat(chat) {
 
 // Открыть редактирование
 async function onEditChatClick(chat) {
-    chatToEdit.value = { ...chat };
+    chatToEdit.value = {
+        ...chat,
+        region: chat.region || "",
+        city: chat.city || "",
+    };
+    syncEditCities();
 }
 
 // Сохранить редактирование
 async function onUpdateChatClick() {
-    await axios.put(`/api/chats/${chatToEdit.value.id}/`, chatToEdit.value);
+    await axios.put(`/api/chats/${chatToEdit.value.id}/`, {
+        ...chatToEdit.value,
+        region: chatToEdit.value.region ? Number(chatToEdit.value.region) : null,
+        city: chatToEdit.value.city ? Number(chatToEdit.value.city) : null,
+    });
     await fetchChats();
 }
 
 onBeforeMount(async () => {
     axios.defaults.headers.common["X-CSRFToken"] = Cookies.get("csrftoken");
+    await fetchGeoRefs();
     await fetchChats();
 });
 </script>
@@ -92,6 +141,24 @@ onBeforeMount(async () => {
                             </label>
                         </div>
                     </div>
+                    <div class="col">
+                        <div class="form-floating">
+                            <select class="form-select" v-model="chatToAdd.region" @change="syncAddCities">
+                                <option value="">—</option>
+                                <option v-for="r in regions" :key="r.id" :value="r.id">{{ r.name }}</option>
+                            </select>
+                            <label>Область</label>
+                        </div>
+                    </div>
+                    <div class="col">
+                        <div class="form-floating">
+                            <select class="form-select" v-model="chatToAdd.city">
+                                <option value="">—</option>
+                                <option v-for="c in filteredCitiesAdd" :key="c.id" :value="c.id">{{ c.name }}</option>
+                            </select>
+                            <label>Город</label>
+                        </div>
+                    </div>
 
                     <div class="col-auto">
                         <button class="btn btn-primary">Добавить</button>
@@ -107,6 +174,7 @@ onBeforeMount(async () => {
                     <div class="chat-info">
                         <div class="chat-title">{{ chat.title }}</div>
                         <div class="chat-id text-muted">{{ chat.chat_id }}</div>
+                        <div class="chat-id text-muted">{{ chat.region_name || "-" }} / {{ chat.city_name || "-" }}</div>
                         <div class="chat-enabled" :class="{ off: !chat.enabled }">
                             {{ chat.enabled ? "Активен" : "Выключен" }}
                         </div>
@@ -158,6 +226,22 @@ onBeforeMount(async () => {
                                 <label class="form-check-label" for="enabledEdit">
                                     Включён
                                 </label>
+                            </div>
+
+                            <div class="form-floating mb-3">
+                                <select class="form-select" v-model="chatToEdit.region" @change="syncEditCities">
+                                    <option value="">—</option>
+                                    <option v-for="r in regions" :key="r.id" :value="r.id">{{ r.name }}</option>
+                                </select>
+                                <label>Область</label>
+                            </div>
+
+                            <div class="form-floating mb-3">
+                                <select class="form-select" v-model="chatToEdit.city">
+                                    <option value="">—</option>
+                                    <option v-for="c in filteredCitiesEdit" :key="c.id" :value="c.id">{{ c.name }}</option>
+                                </select>
+                                <label>Город</label>
                             </div>
                         </form>
                     </div>

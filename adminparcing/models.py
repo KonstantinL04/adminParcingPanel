@@ -1,12 +1,25 @@
 from django.db import models
 from django.contrib.gis.db import models as gis_models
-from django.contrib.gis.geos import Point
 from adminparcing.utils.crypto import fernet
 # ✔ Чаты
 class Chat(models.Model):
     title = models.CharField(max_length=255)
     chat_id = models.CharField(max_length=255, unique=True)
     enabled = models.BooleanField(default=True)
+    region = models.ForeignKey(
+        "Region",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="chats",
+    )
+    city = models.ForeignKey(
+        "City",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="chats",
+    )
 
     def __str__(self):
         return self.title
@@ -23,6 +36,7 @@ class ExcludedUser(models.Model):
 # ✔ Категории
 class AlertCategory(models.Model):
     name = models.CharField(max_length=50, unique=True)
+    image = models.ImageField(upload_to="category_icons/", null=True, blank=True)
 
     text_patterns = models.JSONField(default=list, blank=True)
     emoji_patterns = models.JSONField(default=list, blank=True)
@@ -38,6 +52,7 @@ class AlertCategory(models.Model):
 # ✔ Регионы/области
 class Region(models.Model):
     name = models.CharField(max_length=100, unique=True)
+    boundary = gis_models.MultiPolygonField(srid=4326, null=True, blank=True)
 
     def __str__(self):
         return self.name
@@ -50,6 +65,7 @@ class City(models.Model):
         related_name="cities"
     )
     name = models.CharField(max_length=100)
+    boundary = gis_models.MultiPolygonField(srid=4326, null=True, blank=True)
 
     class Meta:
         unique_together = ("region", "name")
@@ -60,7 +76,8 @@ class City(models.Model):
 # ✔ Словарь мест
 class Location(models.Model):
     name = models.CharField(max_length=255)
-    location = gis_models.PointField(default=Point(0.0, 0.0))
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    location = gis_models.PointField(null=True, blank=True)
     synonyms = models.JSONField(default=list)
     chat = models.ForeignKey(
         Chat,
