@@ -26,7 +26,8 @@ from asgiref.sync import sync_to_async
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "app.settings")
 django.setup()
 
-from adminparcing.models import Chat, AlertCategory, ExcludedUser, SettingAPI
+from adminparcing.models import Chat, ExcludedUser, SettingAPI
+from events.models import EventClassItem
 from adminparcing.services.event_client import send_parsed_message
 
 # ─────────────────────────────────────────────────────────────
@@ -106,7 +107,7 @@ def load_categories():
     category_map = {}
     text_patterns = {}
     emoji_groups = {}
-    for cat in AlertCategory.objects.filter(enabled=True):
+    for cat in EventClassItem.objects.filter(enabled=True, source_kind=EventClassItem.SOURCE_DYNAMIC):
         category_map[cat.name] = {"id": cat.id, "name": cat.name}
         if cat.text_patterns:
             text_patterns[cat.name] = cat.text_patterns

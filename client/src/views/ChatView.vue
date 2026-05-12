@@ -99,195 +99,602 @@ onBeforeMount(async () => {
 
 
 <template>
-    <div class="container-fluid">
-        <div class="p-2">
+    <div class="page-wrap">
 
-            <div class="mb-3">
-                <h4>Телеграм-чаты</h4>
+        <div class="page-header mb-4">
+            <div>
+                <h2 class="page-title">
+                    <i class="bi bi-chat-dots-fill me-2"></i>
+                    Телеграм-чаты
+                </h2>
+
+                <div class="page-subtitle">
+                    Управление чатами для Telethon-парсера
+                </div>
+            </div>
+        </div>
+
+        <!-- CREATE -->
+
+        <div class="custom-card mb-4">
+
+            <div class="card-title-custom">
+                <i class="bi bi-plus-circle-fill me-2"></i>
+                Добавить чат
             </div>
 
-            <!-- Добавление чата -->
             <form @submit.prevent.stop="onAddChat">
-                <div class="row g-2 align-items-center">
-                    
-                    <div class="col">
-                        <div class="form-floating">
-                            <input type="text"
-                                   class="form-control"
-                                   v-model="chatToAdd.title"
-                                   required />
-                            <label>Название чата</label>
-                        </div>
+
+                <div class="row g-3">
+
+                    <div class="col-xl-3 col-lg-6">
+                        <label class="form-label">Название чата</label>
+
+                        <input
+                            type="text"
+                            class="form-control custom-input"
+                            v-model="chatToAdd.title"
+                            required
+                        />
                     </div>
 
-                    <div class="col">
-                        <div class="form-floating">
-                            <input type="text"
-                                   class="form-control"
-                                   v-model="chatToAdd.chat_id"
-                                   required />
-                            <label>ID чата или username</label>
-                        </div>
+                    <div class="col-xl-3 col-lg-6">
+                        <label class="form-label">ID / username</label>
+
+                        <input
+                            type="text"
+                            class="form-control custom-input"
+                            v-model="chatToAdd.chat_id"
+                            required
+                        />
                     </div>
 
-                    <div class="col-auto">
-                        <div class="form-check">
-                            <input class="form-check-input"
-                                   type="checkbox"
-                                   v-model="chatToAdd.enabled"
-                                   id="enabledAdd">
-                            <label class="form-check-label" for="enabledAdd">
-                                Включён
+                    <div class="col-xl-2 col-lg-4">
+                        <label class="form-label">Область</label>
+
+                        <select
+                            class="form-select custom-input"
+                            v-model="chatToAdd.region"
+                            @change="syncAddCities"
+                        >
+                            <option value="">—</option>
+
+                            <option
+                                v-for="r in regions"
+                                :key="r.id"
+                                :value="r.id"
+                            >
+                                {{ r.name }}
+                            </option>
+                        </select>
+                    </div>
+
+                    <div class="col-xl-2 col-lg-4">
+                        <label class="form-label">Город</label>
+
+                        <select
+                            class="form-select custom-input"
+                            v-model="chatToAdd.city"
+                        >
+                            <option value="">—</option>
+
+                            <option
+                                v-for="c in filteredCitiesAdd"
+                                :key="c.id"
+                                :value="c.id"
+                            >
+                                {{ c.name }}
+                            </option>
+                        </select>
+                    </div>
+
+                    <div class="col-xl-2 col-lg-4">
+                        <label class="form-label">Статус</label>
+
+                        <div class="status-switch">
+                            <input
+                                class="form-check-input"
+                                type="checkbox"
+                                id="enabledAdd"
+                                v-model="chatToAdd.enabled"
+                            />
+
+                            <label
+                                class="form-check-label"
+                                for="enabledAdd"
+                            >
+                                Активен
                             </label>
                         </div>
                     </div>
-                    <div class="col">
-                        <div class="form-floating">
-                            <select class="form-select" v-model="chatToAdd.region" @change="syncAddCities">
-                                <option value="">—</option>
-                                <option v-for="r in regions" :key="r.id" :value="r.id">{{ r.name }}</option>
-                            </select>
-                            <label>Область</label>
-                        </div>
-                    </div>
-                    <div class="col">
-                        <div class="form-floating">
-                            <select class="form-select" v-model="chatToAdd.city">
-                                <option value="">—</option>
-                                <option v-for="c in filteredCitiesAdd" :key="c.id" :value="c.id">{{ c.name }}</option>
-                            </select>
-                            <label>Город</label>
-                        </div>
+
+                    <div class="col-12 d-flex justify-content-end">
+                        <button class="btn-create">
+                            <i class="bi bi-plus-lg me-2"></i>
+                            Добавить чат
+                        </button>
                     </div>
 
-                    <div class="col-auto">
-                        <button class="btn btn-primary">Добавить</button>
-                    </div>
                 </div>
+
             </form>
 
-            <!-- Список чатов -->
-            <div v-if="loading" class="mt-3">Загрузка...</div>
+        </div>
 
-            <div v-else class="mt-3">
-                <div v-for="chat in chats" :key="chat.id" class="chat-item">
-                    <div class="chat-info">
-                        <div class="chat-title">{{ chat.title }}</div>
-                        <div class="chat-id text-muted">{{ chat.chat_id }}</div>
-                        <div class="chat-id text-muted">{{ chat.region_name || "-" }} / {{ chat.city_name || "-" }}</div>
-                        <div class="chat-enabled" :class="{ off: !chat.enabled }">
+        <!-- LIST -->
+
+        <div class="custom-card">
+
+            <div class="card-title-custom mb-4">
+                <i class="bi bi-list-ul me-2"></i>
+                Список чатов
+            </div>
+
+            <div v-if="loading" class="loading-box">
+                Загрузка...
+            </div>
+
+            <div
+                v-else-if="!chats.length"
+                class="empty-box"
+            >
+                Чаты отсутствуют
+            </div>
+
+            <div
+                v-else
+                class="chat-grid"
+            >
+
+                <div
+                    v-for="chat in chats"
+                    :key="chat.id"
+                    class="chat-card"
+                >
+
+                    <div class="chat-card-top">
+
+                        <div class="chat-icon">
+                            <i class="bi bi-telegram"></i>
+                        </div>
+
+                        <div
+                            class="status-badge"
+                            :class="chat.enabled ? 'active' : 'inactive'"
+                        >
                             {{ chat.enabled ? "Активен" : "Выключен" }}
                         </div>
+
+                    </div>
+
+                    <div class="chat-title">
+                        {{ chat.title }}
+                    </div>
+
+                    <div class="chat-id">
+                        {{ chat.chat_id }}
+                    </div>
+
+                    <div class="chat-location">
+                        <i class="bi bi-geo-alt me-1"></i>
+
+                        {{ chat.region_name || "—" }}
+                        /
+                        {{ chat.city_name || "—" }}
                     </div>
 
                     <div class="chat-actions">
+
                         <button
-                                class="btn btn-warning"
-                                @click="onEditChatClick(chat)"
-                                data-bs-toggle="modal"
-                                data-bs-target="#editChatModal">
-                            <i class="bi bi-pen-fill"></i>
+                            class="btn-action btn-edit"
+                            @click="onEditChatClick(chat)"
+                            data-bs-toggle="modal"
+                            data-bs-target="#editChatModal"
+                        >
+                            <i class="bi bi-pencil-square me-1"></i>
+                            Редактировать
                         </button>
+
                         <button
-                                class="btn btn-danger"
-                                @click="onRemoveChat(chat)">
-                            <i class="bi bi-trash3-fill"></i>
+                            class="btn-action btn-delete"
+                            @click="onRemoveChat(chat)"
+                        >
+                            <i class="bi bi-trash3 me-1"></i>
+                            Удалить
                         </button>
+
                     </div>
+
                 </div>
+
             </div>
+
         </div>
 
-        <!-- Модальное окно редактирования -->
-        <div class="modal fade" id="editChatModal" tabindex="-1">
-            <div class="modal-dialog">
-                <div class="modal-content">
+        <!-- MODAL -->
 
-                    <div class="modal-header">
-                        <h1 class="modal-title fs-5">Редактировать чат</h1>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        <div
+            class="modal fade"
+            id="editChatModal"
+            tabindex="-1"
+        >
+
+            <div class="modal-dialog modal-dialog-centered">
+
+                <div class="modal-content custom-modal">
+
+                    <div class="modal-header border-0 pb-0">
+
+                        <h5 class="modal-title fw-bold">
+                            Редактирование чата
+                        </h5>
+
+                        <button
+                            type="button"
+                            class="btn-close"
+                            data-bs-dismiss="modal"
+                        ></button>
+
                     </div>
 
                     <div class="modal-body">
-                        <form @submit.prevent.stop="onUpdateChatClick">
 
-                            <div class="form-floating mb-3">
-                                <input type="text" class="form-control" v-model="chatToEdit.title" required />
-                                <label>Название</label>
-                            </div>
+                        <div class="row g-3">
 
-                            <div class="form-floating mb-3">
-                                <input type="text" class="form-control" v-model="chatToEdit.chat_id" required />
-                                <label>ID чата</label>
-                            </div>
-
-                            <div class="form-check mb-3">
-                                <input class="form-check-input" type="checkbox" v-model="chatToEdit.enabled" id="enabledEdit">
-                                <label class="form-check-label" for="enabledEdit">
-                                    Включён
+                            <div class="col-12">
+                                <label class="form-label">
+                                    Название
                                 </label>
+
+                                <input
+                                    type="text"
+                                    class="form-control custom-input"
+                                    v-model="chatToEdit.title"
+                                />
                             </div>
 
-                            <div class="form-floating mb-3">
-                                <select class="form-select" v-model="chatToEdit.region" @change="syncEditCities">
-                                    <option value="">—</option>
-                                    <option v-for="r in regions" :key="r.id" :value="r.id">{{ r.name }}</option>
-                                </select>
-                                <label>Область</label>
+                            <div class="col-12">
+                                <label class="form-label">
+                                    ID / username
+                                </label>
+
+                                <input
+                                    type="text"
+                                    class="form-control custom-input"
+                                    v-model="chatToEdit.chat_id"
+                                />
                             </div>
 
-                            <div class="form-floating mb-3">
-                                <select class="form-select" v-model="chatToEdit.city">
+                            <div class="col-md-6">
+                                <label class="form-label">
+                                    Область
+                                </label>
+
+                                <select
+                                    class="form-select custom-input"
+                                    v-model="chatToEdit.region"
+                                    @change="syncEditCities"
+                                >
                                     <option value="">—</option>
-                                    <option v-for="c in filteredCitiesEdit" :key="c.id" :value="c.id">{{ c.name }}</option>
+
+                                    <option
+                                        v-for="r in regions"
+                                        :key="r.id"
+                                        :value="r.id"
+                                    >
+                                        {{ r.name }}
+                                    </option>
                                 </select>
-                                <label>Город</label>
                             </div>
-                        </form>
+
+                            <div class="col-md-6">
+                                <label class="form-label">
+                                    Город
+                                </label>
+
+                                <select
+                                    class="form-select custom-input"
+                                    v-model="chatToEdit.city"
+                                >
+                                    <option value="">—</option>
+
+                                    <option
+                                        v-for="c in filteredCitiesEdit"
+                                        :key="c.id"
+                                        :value="c.id"
+                                    >
+                                        {{ c.name }}
+                                    </option>
+                                </select>
+                            </div>
+
+                            <div class="col-12">
+
+                                <div class="status-switch">
+                                    <input
+                                        class="form-check-input"
+                                        type="checkbox"
+                                        id="enabledEdit"
+                                        v-model="chatToEdit.enabled"
+                                    />
+
+                                    <label
+                                        class="form-check-label"
+                                        for="enabledEdit"
+                                    >
+                                        Активен
+                                    </label>
+                                </div>
+
+                            </div>
+
+                        </div>
+
                     </div>
 
-                    <div class="modal-footer">
-                        <button class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
-                        <button class="btn btn-primary" data-bs-dismiss="modal" @click="onUpdateChatClick">Сохранить</button>
+                    <div class="modal-footer border-0 pt-0">
+
+                        <button
+                            class="btn-cancel"
+                            data-bs-dismiss="modal"
+                        >
+                            Отмена
+                        </button>
+
+                        <button
+                            class="btn-save"
+                            data-bs-dismiss="modal"
+                            @click="onUpdateChatClick"
+                        >
+                            Сохранить
+                        </button>
+
                     </div>
 
                 </div>
+
             </div>
+
         </div>
+
     </div>
 </template>
 
-
 <style scoped>
-.chat-item {
+.page-wrap {
+    padding: 8px 0 30px;
+}
+
+.page-title {
+    font-size: 28px;
+    font-weight: 800;
+    color: #111;
+    margin-bottom: 4px;
+}
+
+.page-subtitle {
+    color: #6c757d;
+    font-size: 15px;
+}
+
+.custom-card {
+    background: rgba(255,255,255,0.92);
+    backdrop-filter: blur(12px);
+    border-radius: 24px;
+    padding: 24px;
+    box-shadow: 0 10px 30px rgba(15,23,42,0.06);
+    border: 1px solid rgba(0,0,0,0.04);
+}
+
+.card-title-custom {
+    font-size: 18px;
+    font-weight: 800;
+    margin-bottom: 20px;
+    color: #111;
+}
+
+.custom-input {
+    border-radius: 14px;
+    border: 1px solid #dfe3e8;
+    padding: 11px 14px;
+    font-weight: 500;
+    box-shadow: none !important;
+}
+
+.custom-input:focus {
+    border-color: #0d6efd;
+}
+
+.status-switch {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 48px;
+    padding: 0 14px;
+    border-radius: 14px;
+    border: 1px solid #dfe3e8;
+    background: #fff;
+}
+
+.btn-create {
+    border: 0;
+    background: #0d6efd;
+    color: #fff;
+    padding: 12px 20px;
+    border-radius: 14px;
+    font-weight: 700;
+    transition: 0.2s ease;
+}
+
+.btn-create:hover {
+    background: #0b5ed7;
+    transform: translateY(-1px);
+}
+
+.chat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 18px;
+}
+
+.chat-card {
+    border-radius: 22px;
+    padding: 20px;
+    background: #fff;
+    border: 1px solid #eef1f4;
+    transition: 0.2s ease;
+}
+
+.chat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 28px rgba(15,23,42,0.06);
+}
+
+.chat-card-top {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: .5rem;
-    margin: .5rem 0;
-    border: 1px solid #ddd;
-    border-radius: 8px;
+    margin-bottom: 18px;
 }
-.chat-info {
+
+.chat-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 18px;
+    background: rgba(13,110,253,0.08);
+    color: #0d6efd;
     display: flex;
-    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
 }
+
 .chat-title {
-    font-weight: 600;
-    font-size: 1.05rem;
+    font-size: 18px;
+    font-weight: 800;
+    color: #111;
+    margin-bottom: 6px;
 }
+
 .chat-id {
-    font-size: .9rem;
+    font-size: 14px;
+    color: #6c757d;
+    margin-bottom: 12px;
+    word-break: break-word;
 }
-.chat-enabled {
-    font-size: .85rem;
-    color: green;
+
+.chat-location {
+    font-size: 14px;
+    color: #495057;
+    margin-bottom: 18px;
 }
-.chat-enabled.off {
-    color: red;
+
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: 700;
 }
+
+.status-badge.active {
+    background: rgba(25,135,84,0.12);
+    color: #198754;
+}
+
+.status-badge.inactive {
+    background: rgba(220,53,69,0.12);
+    color: #dc3545;
+}
+
 .chat-actions {
     display: flex;
-    gap: .5rem;
+    gap: 10px;
+}
+
+.btn-action {
+    flex: 1;
+    border: 0;
+    border-radius: 14px;
+    padding: 11px 14px;
+    font-weight: 700;
+    transition: 0.2s ease;
+}
+
+.btn-edit {
+    background: rgba(13,110,253,0.1);
+    color: #0d6efd;
+}
+
+.btn-edit:hover {
+    background: #0d6efd;
+    color: #fff;
+}
+
+.btn-delete {
+    background: rgba(220,53,69,0.1);
+    color: #dc3545;
+}
+
+.btn-delete:hover {
+    background: #dc3545;
+    color: #fff;
+}
+
+.custom-modal {
+    border: 0;
+    border-radius: 24px;
+    padding: 10px;
+}
+
+.btn-cancel,
+.btn-save {
+    border: 0;
+    border-radius: 14px;
+    padding: 12px 20px;
+    font-weight: 700;
+}
+
+.btn-cancel {
+    background: #eef1f4;
+}
+
+.btn-save {
+    background: #0d6efd;
+    color: #fff;
+}
+
+.loading-box,
+.empty-box {
+    padding: 40px;
+    text-align: center;
+    color: #6c757d;
+    border-radius: 18px;
+    background: #f8fafc;
+}
+
+@media (max-width: 991.98px) {
+
+    .custom-card {
+        padding: 18px;
+        border-radius: 20px;
+    }
+
+    .page-title {
+        font-size: 22px;
+    }
+
+    .chat-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .chat-actions {
+        flex-direction: column;
+    }
+
+    .btn-create {
+        width: 100%;
+    }
 }
 </style>

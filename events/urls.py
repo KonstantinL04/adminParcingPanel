@@ -1,21 +1,29 @@
+# urls.py
+
 from rest_framework.routers import DefaultRouter
 from .api import (
-    ParsedMessageViewSet,
-    RoadEventViewSet,
-    EventVoteViewSet,
+    EventClassViewSet,
+    EventClassItemViewSet,
+    MapEventViewSet,
+    EntityVoteViewSet,
     PocketGisSourceViewSet,
     PocketGisImportViewSet,
-    PocketGisPointViewSet,
-    PocketGisCategoryViewSet,
 )
 
 router = DefaultRouter()
-router.register("messages", ParsedMessageViewSet, basename="events-messages")
-router.register("road-events", RoadEventViewSet, basename="events-road-events")
-router.register("votes", EventVoteViewSet, basename="events-votes")
-router.register("pocketgis/sources", PocketGisSourceViewSet, basename="events-pocketgis-sources")
-router.register("pocketgis/imports", PocketGisImportViewSet, basename="events-pocketgis-imports")
-router.register("pocketgis/points", PocketGisPointViewSet, basename="events-pocketgis-points")
-router.register("pocketgis/categories", PocketGisCategoryViewSet, basename="events-pocketgis-categories")
+
+# Каталог событий
+router.register("event-classes", EventClassViewSet, basename="event-classes")
+router.register("event-class-items", EventClassItemViewSet, basename="event-class-items")
+
+# Точки на карте (единый endpoint)
+router.register("events", MapEventViewSet, basename="events")
+
+# Голосование
+router.register("votes", EntityVoteViewSet, basename="votes")
+
+# Импорт PocketGIS
+router.register("pocketgis/sources", PocketGisSourceViewSet, basename="pocketgis-sources")
+router.register("pocketgis/imports", PocketGisImportViewSet, basename="pocketgis-imports")
 
 urlpatterns = router.urls

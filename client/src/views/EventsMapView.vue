@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref, onMounted, onUnmounted, watch, nextTick } from "vue";
 import axios from "axios";
+import { useAuthStore } from "@/stores/auth";
 import accidentIcon from "@/assets/accident.png";
 import cameraIcon from "@/assets/camera.png";
 import clearIcon from "@/assets/clear.png";
@@ -13,6 +14,7 @@ import confidenceLowIcon from "@/assets/confidence low.png";
 import defaultEventIcon from "@/assets/default.png";
 
 const mapContainer = ref(null);
+const auth = useAuthStore();
 const mapState = ref({ map: null, ymaps: null, zoomControl: null, addCollection: null, zoneCollection: null });
 
 let clusterer = null;
@@ -38,6 +40,7 @@ const selectedPocketPoint = ref(null);
 const editCategoryId = ref(null);
 const isSaving = ref(false);
 const isDeleting = ref(false);
+const isVoting = ref(false);
 const modalError = ref("");
 const showEventModal = ref(false);
 const showPocketModal = ref(false);
@@ -1067,6 +1070,53 @@ async function deleteEvent() {
     }
 }
 
+function currentUserVoteId() {
+    return (
+        auth.user?.id ||
+        auth.user?.email ||
+        auth.user?.username ||
+        "anonymous"
+    );
+}
+
+async function voteForEntity(entityType, entity, voteValue) {
+    if (!entity?.id) return;
+    const coords = entity?.location?.coordinates;
+    if (!Array.isArray(coords) || coords.length !== 2) {
+        modalError.value = "Не удалось получить координаты объекта";
+        return;
+    }
+    const lon = Number(coords[0]);
+    const lat = Number(coords[1]);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+        modalError.value = "Некорректные координаты для голосования";
+        return;
+    }
+
+    isVoting.value = true;
+    modalError.value = "";
+    try {
+        await axios.post("/api/events/votes/", {
+            entity_type: entityType,
+            entity_id: entity.id,
+            vote: Number(voteValue) >= 0 ? 1 : -1,
+            lat,
+            lon,
+            user_id: String(currentUserVoteId()),
+        });
+        await Promise.all([loadEvents(), loadPocketGisPoints()]);
+        if (entityType === "roadevent") {
+            selectedEvent.value = eventsList.value.find((x) => x.id === entity.id) || selectedEvent.value;
+        } else {
+            selectedPocketPoint.value = pocketPointsList.value.find((x) => x.id === entity.id) || selectedPocketPoint.value;
+        }
+    } catch (e) {
+        modalError.value = e?.response?.data?.detail || "Не удалось отправить голос";
+    } finally {
+        isVoting.value = false;
+    }
+}
+
 function timeAgo(inputDate) {
     const date = new Date(inputDate);
     const diffSeconds = Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000));
@@ -1389,6 +1439,14 @@ onUnmounted(() => {
                             <div class="vote-time">{{ eventVoteStats.lastDenyText }}</div>
                         </div>
                     </div>
+                    <div class="d-flex gap-2 mb-3">
+                        <button class="btn btn-success flex-fill" :disabled="isVoting" @click="voteForEntity('roadevent', selectedEvent, 1)">
+                            Подтвердить
+                        </button>
+                        <button class="btn btn-danger flex-fill" :disabled="isVoting" @click="voteForEntity('roadevent', selectedEvent, -1)">
+                            Опровергнуть
+                        </button>
+                    </div>
 
                     <div class="bottom-row mb-3">
                         <div class="confidence-wrap">
@@ -1454,6 +1512,15 @@ onUnmounted(() => {
                             <span class="pocket-val">{{ selectedPocketPoint?.external_idx || "—" }}</span>
                         </div>
                     </div>
+                    <div class="d-flex gap-2 mt-3">
+                        <button class="btn btn-success flex-fill" :disabled="isVoting" @click="voteForEntity('pocketgispoint', selectedPocketPoint, 1)">
+                            Подтвердить
+                        </button>
+                        <button class="btn btn-danger flex-fill" :disabled="isVoting" @click="voteForEntity('pocketgispoint', selectedPocketPoint, -1)">
+                            Опровергнуть
+                        </button>
+                    </div>
+                    <div v-if="modalError" class="alert alert-danger py-2 mt-3 mb-0">{{ modalError }}</div>
                 </div>
             </div>
         </div>

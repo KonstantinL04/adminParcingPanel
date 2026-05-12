@@ -1,7 +1,7 @@
 from django.contrib.gis.geos import Point
 from django.contrib.gis.measure import D
 from django.utils import timezone
-from events.models import RoadEvent
+from events.models import MapEvent
 from adminparcing.services.event_status import get_ttl_minutes
 
 MAX_DISTANCE_METERS = 50
@@ -26,9 +26,10 @@ def process_parsed_message(parsed_message, locations):
         # Ищем существующее событие рядом ТОЛЬКО той же категории.
         # События разных категорий должны существовать независимо.
         event = (
-            RoadEvent.objects
+            MapEvent.objects
             .filter(
-                status__in=["active", "confirmed"],
+                source_kind=MapEvent.SOURCE_DYNAMIC,
+                status__in=[MapEvent.STATUS_ACTIVE, MapEvent.STATUS_CONFIRMED],
                 category_id=category_id,
                 location__distance_lte=(point, D(m=MAX_DISTANCE_METERS))
             )
@@ -47,7 +48,8 @@ def process_parsed_message(parsed_message, locations):
         if not event:
             # создаём новое событие
             ttl_minutes = get_ttl_minutes(category_id, category_name)
-            RoadEvent.objects.create(
+            MapEvent.objects.create(
+                source_kind=MapEvent.SOURCE_DYNAMIC,
                 source_message=parsed_message,
                 location=point,
                 category_id=category_id,
@@ -60,9 +62,10 @@ def process_parsed_message(parsed_message, locations):
                     "author_name": parsed_message.author_name or "",
                 },
                 user_id=str(parsed_message.author_id) if parsed_message.author_id is not None else None,
-                status="active",
+                status=MapEvent.STATUS_ACTIVE,
                 confidence=loc.get("confidence", 0.7),
                 confirmations=1,
                 valid_until=timezone.now() + timezone.timedelta(minutes=ttl_minutes),
                 source="telegram",
+                is_active=True,
             )

@@ -37,9 +37,6 @@ function closeMobileMenu() {
 watch(() => route.path, () => {
   closeMobileMenu();
 });
-
-
-
 </script>
 
 <template>
@@ -57,8 +54,8 @@ watch(() => route.path, () => {
           Дорожный помощник
         </router-link>
 
-        <!-- mobile -->
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+        <!-- mobile toggler — явно справа -->
+        <button class="navbar-toggler ms-auto" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
           <span class="navbar-toggler-icon"></span>
         </button>
 
@@ -106,9 +103,9 @@ watch(() => route.path, () => {
                 </li>
 
                 <li>
-                  <router-link to="/alert_categories" class="dropdown-item">
+                  <router-link to="/parsing-categories" class="dropdown-item">
                     <i class="bi bi-car-front-fill me-2"></i>
-                    Категории
+                    Категории парсинга
                   </router-link>
                 </li>
 
@@ -178,9 +175,69 @@ watch(() => route.path, () => {
                 </li>
 
                 <li>
-                  <router-link to="/pocketgis-categories" class="dropdown-item">
+                  <router-link to="/categories" class="dropdown-item">
                     <i class="bi bi-grid-fill me-2"></i>
                     Категории
+                  </router-link>
+                </li>
+
+                <li>
+                  <router-link to="/help-requests" class="dropdown-item">
+                    <i class="bi bi-life-preserver me-2"></i>
+                    Взаимопомощь
+                  </router-link>
+                </li>
+
+                <li>
+                  <router-link to="/categories" class="dropdown-item">
+                    <i class="bi bi-diagram-3-fill me-2"></i>
+                    Классификация событий
+                  </router-link>
+                </li>
+
+              </ul>
+            </li>
+
+            <li class="nav-item dropdown main-dropdown">
+              <a href="#" class="nav-link dropdown-toggle top-link" data-bs-toggle="dropdown">
+                <i class="bi bi-person-bounding-box"></i>
+                Управление пользователями
+              </a>
+
+              <ul class="dropdown-menu dropdown-menu-end custom-menu shadow border-0">
+
+                <li>
+                  <router-link to="/pocketgis" class="dropdown-item">
+                    <i class="bi bi-upload me-2"></i>
+                    Импорт событий
+                  </router-link>
+                </li>
+
+                <li>
+                  <router-link to="/regions-polygons" class="dropdown-item">
+                    <i class="bi bi-bounding-box me-2"></i>
+                    Полигоны областей
+                  </router-link>
+                </li>
+
+                <li>
+                  <router-link to="/categories" class="dropdown-item">
+                    <i class="bi bi-grid-fill me-2"></i>
+                    Категории
+                  </router-link>
+                </li>
+
+                <li>
+                  <router-link to="/help-requests" class="dropdown-item">
+                    <i class="bi bi-life-preserver me-2"></i>
+                    Взаимопомощь
+                  </router-link>
+                </li>
+
+                <li>
+                  <router-link to="/categories" class="dropdown-item">
+                    <i class="bi bi-diagram-3-fill me-2"></i>
+                    Классификация событий
                   </router-link>
                 </li>
 
@@ -257,7 +314,31 @@ watch(() => route.path, () => {
 </template>
 
 <style scoped>
+/* ---- mobile ---- */
 @media (max-width: 991.98px) {
+
+  /* Шапка: иконка + название слева, тоглер справа — всё в одну строку */
+  .navbar-safe {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .navbar-brand {
+    flex: 1 1 auto;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .navbar-toggler {
+    flex: 0 0 auto;
+    /* ms-auto в разметке уже прижимает вправо, но страхуемся */
+    margin-left: auto;
+  }
 
   .navbar-nav.mx-auto {
     margin-left: 0 !important;
@@ -302,7 +383,6 @@ watch(() => route.path, () => {
 
   .custom-menu .dropdown-item {
     padding: 0px 0px;
-    /* было 11px 14px */
   }
 
   .main-dropdown .dropdown-menu.show {
@@ -330,6 +410,8 @@ watch(() => route.path, () => {
 
 .main-content {
   min-height: calc(100vh - 72px);
+  padding-left: 258px !important;
+  padding-right: 258px !important;
 }
 
 /* navbar */

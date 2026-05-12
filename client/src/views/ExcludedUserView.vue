@@ -2,20 +2,23 @@
 import axios from "axios";
 import { ref, onBeforeMount } from "vue";
 import Cookies from "js-cookie";
-// import { useUserStore } from "@/stores/user";
-
-// const userStore = useUserStore();
 
 const excludedUsers = ref([]);
 const loading = ref(false);
 
-const userToAdd = ref({ value: "" });
+const userToAdd = ref({
+  value: "",
+});
+
 const userToEdit = ref({});
 
 async function fetchExcludedUsers() {
   loading.value = true;
+
   const r = await axios.get("/api/excluded_users/");
+
   excludedUsers.value = r.data;
+
   loading.value = false;
 }
 
@@ -25,11 +28,13 @@ async function onAddUser() {
   });
 
   userToAdd.value.value = "";
+
   await fetchExcludedUsers();
 }
 
 async function onRemoveUser(user) {
   await axios.delete(`/api/excluded_users/${user.id}/`);
+
   await fetchExcludedUsers();
 }
 
@@ -46,93 +51,424 @@ async function onUpdateUserClick() {
 }
 
 onBeforeMount(async () => {
-  axios.defaults.headers.common["X-CSRFToken"] = Cookies.get("csrftoken");
+  axios.defaults.headers.common["X-CSRFToken"] =
+    Cookies.get("csrftoken");
+
   await fetchExcludedUsers();
 });
 </script>
 
 <template>
-  <div class="p-3">
-    <h4>Исключённые пользователи</h4>
+  <div class="page-wrap">
 
-    <!-- Добавление -->
-    <form @submit.prevent.stop="onAddUser" class="mt-2">
-      <div class="row g-2 align-items-center">
-        <div class="col">
-          <div class="form-floating">
-            <input type="text" class="form-control" v-model="userToAdd.value" required />
-            <label>Имя / ID пользователя</label>
-          </div>
-        </div>
-        <div class="col-auto">
-          <button class="btn btn-primary">Добавить</button>
-        </div>
-      </div>
-    </form>
+    <!-- HEADER -->
 
-    <div v-if="loading" class="mt-3">Загрузка...</div>
+    <div class="page-header mb-4">
 
-    <!-- List -->
-    <div v-else class="mt-3">
-      <div v-for="u in excludedUsers" :key="u.id" class="item-box">
-        <div class="item-text">{{ u.value }}</div>
-        <div class="item-actions">
-          <button class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#editUserModal"
-            @click="onEditUserClick(u)">
-            <i class="bi bi-pen-fill"></i>
-          </button>
-          <button class="btn btn-danger" @click="onRemoveUser(u)">
-            <i class="bi bi-trash3-fill"></i>
-          </button>
+      <div>
+        <h2 class="page-title">
+          <i class="bi bi-person-x-fill me-2"></i>
+          Исключённые пользователи
+        </h2>
+
+        <div class="page-subtitle">
+          Пользователи, которых парсер игнорирует
         </div>
       </div>
+
     </div>
 
-    <!-- Edit modal -->
-    <div class="modal fade" id="editUserModal" tabindex="-1">
-      <div class="modal-dialog">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title">Редактировать пользователя</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+    <!-- ADD -->
+
+    <div class="custom-card mb-4">
+
+      <div class="card-title-custom">
+        <i class="bi bi-plus-circle-fill me-2"></i>
+        Добавить пользователя
+      </div>
+
+      <form @submit.prevent.stop="onAddUser">
+
+        <div class="row g-3 align-items-end">
+
+          <div class="col-lg">
+            <label class="form-label">
+              Имя / ID пользователя
+            </label>
+
+            <input
+              type="text"
+              class="form-control custom-input"
+              v-model="userToAdd.value"
+              required
+              placeholder="@username или ID"
+            />
           </div>
-          <div class="modal-body">
-            <div class="form-floating">
-              <input type="text" class="form-control" v-model="userToEdit.value" required />
-              <label>Имя / ID пользователя</label>
-            </div>
-          </div>
-          <div class="modal-footer">
-            <button class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
-            <button class="btn btn-primary" data-bs-dismiss="modal" @click="onUpdateUserClick">
-              Сохранить
+
+          <div class="col-lg-auto">
+            <button class="btn-create">
+              <i class="bi bi-plus-lg me-2"></i>
+              Добавить
             </button>
           </div>
+
         </div>
+
+      </form>
+
+    </div>
+
+    <!-- LIST -->
+
+    <div class="custom-card">
+
+      <div class="card-title-custom mb-4">
+        <i class="bi bi-list-ul me-2"></i>
+        Список пользователей
       </div>
+
+      <div
+        v-if="loading"
+        class="loading-box"
+      >
+        Загрузка...
+      </div>
+
+      <div
+        v-else-if="excludedUsers.length === 0"
+        class="empty-box"
+      >
+        <i class="bi bi-inbox me-2"></i>
+        Список пуст
+      </div>
+
+      <div
+        v-else
+        class="users-grid"
+      >
+
+        <div
+          v-for="u in excludedUsers"
+          :key="u.id"
+          class="user-card"
+        >
+
+          <div class="user-left">
+
+            <div class="user-avatar">
+              <i class="bi bi-person-fill"></i>
+            </div>
+
+            <div>
+              <div class="user-name">
+                {{ u.value }}
+              </div>
+
+              <div class="user-id">
+                ID: {{ u.id }}
+              </div>
+            </div>
+
+          </div>
+
+          <div class="item-actions">
+
+            <button
+              class="btn-action btn-edit"
+              data-bs-toggle="modal"
+              data-bs-target="#editUserModal"
+              @click="onEditUserClick(u)"
+            >
+              <i class="bi bi-pencil-square me-1"></i>
+              Редактировать
+            </button>
+
+            <button
+              class="btn-action btn-delete"
+              @click="onRemoveUser(u)"
+            >
+              <i class="bi bi-trash3 me-1"></i>
+              Удалить
+            </button>
+
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- MODAL -->
+
+    <div
+      class="modal fade"
+      id="editUserModal"
+      tabindex="-1"
+    >
+
+      <div class="modal-dialog modal-dialog-centered">
+
+        <div class="modal-content custom-modal">
+
+          <div class="modal-header border-0 pb-0">
+
+            <h5 class="modal-title fw-bold">
+              Редактировать пользователя
+            </h5>
+
+            <button
+              type="button"
+              class="btn-close"
+              data-bs-dismiss="modal"
+            ></button>
+
+          </div>
+
+          <div class="modal-body">
+
+            <label class="form-label">
+              Имя / ID пользователя
+            </label>
+
+            <input
+              type="text"
+              class="form-control custom-input"
+              v-model="userToEdit.value"
+              required
+            />
+
+          </div>
+
+          <div class="modal-footer border-0 pt-0">
+
+            <button
+              class="btn-cancel"
+              data-bs-dismiss="modal"
+            >
+              Отмена
+            </button>
+
+            <button
+              class="btn-save"
+              data-bs-dismiss="modal"
+              @click="onUpdateUserClick"
+            >
+              Сохранить
+            </button>
+
+          </div>
+
+        </div>
+
+      </div>
+
     </div>
 
   </div>
 </template>
 
 <style scoped>
-.item-box {
+.page-wrap {
+  padding: 8px 0 30px;
+}
+
+.page-title {
+  font-size: 28px;
+  font-weight: 800;
+  color: #111;
+  margin-bottom: 4px;
+}
+
+.page-subtitle {
+  color: #6c757d;
+  font-size: 15px;
+}
+
+.custom-card {
+  background: rgba(255,255,255,0.92);
+  backdrop-filter: blur(12px);
+  border-radius: 24px;
+  padding: 24px;
+  box-shadow: 0 10px 30px rgba(15,23,42,0.06);
+  border: 1px solid rgba(0,0,0,0.04);
+}
+
+.card-title-custom {
+  font-size: 18px;
+  font-weight: 800;
+  margin-bottom: 18px;
+  color: #111;
+}
+
+.custom-input {
+  border-radius: 14px;
+  border: 1px solid #dfe3e8;
+  padding: 12px 14px;
+  font-weight: 500;
+  box-shadow: none !important;
+}
+
+.custom-input:focus {
+  border-color: #0d6efd;
+}
+
+.btn-create {
+  border: 0;
+  background: #0d6efd;
+  color: #fff;
+  padding: 12px 20px;
+  border-radius: 14px;
+  font-weight: 700;
+  transition: 0.2s ease;
+}
+
+.btn-create:hover {
+  background: #0b5ed7;
+  transform: translateY(-1px);
+}
+
+.users-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.user-card {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.5rem;
-  border: 1px solid #d0d0d0;
-  border-radius: 8px;
-  margin-bottom: 0.5rem;
+  gap: 18px;
+  padding: 18px;
+  border-radius: 20px;
+  background: #f8fafc;
+  border: 1px solid #eef1f4;
+  transition: 0.2s ease;
 }
 
-.item-text {
-  font-size: 1rem;
-  font-weight: 500;
+.user-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(15,23,42,0.06);
+}
+
+.user-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.user-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  background: rgba(13,110,253,0.1);
+  color: #0d6efd;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+}
+
+.user-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: #111;
+}
+
+.user-id {
+  font-size: 13px;
+  color: #6c757d;
+  margin-top: 2px;
 }
 
 .item-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: 10px;
+}
+
+.btn-action {
+  border: 0;
+  border-radius: 14px;
+  padding: 10px 14px;
+  font-weight: 700;
+  transition: 0.2s ease;
+}
+
+.btn-edit {
+  background: rgba(13,110,253,0.1);
+  color: #0d6efd;
+}
+
+.btn-edit:hover {
+  background: #0d6efd;
+  color: #fff;
+}
+
+.btn-delete {
+  background: rgba(220,53,69,0.1);
+  color: #dc3545;
+}
+
+.btn-delete:hover {
+  background: #dc3545;
+  color: #fff;
+}
+
+.loading-box,
+.empty-box {
+  padding: 40px;
+  text-align: center;
+  color: #6c757d;
+  font-weight: 600;
+}
+
+.custom-modal {
+  border: 0;
+  border-radius: 24px;
+  padding: 10px;
+}
+
+.btn-cancel,
+.btn-save {
+  border: 0;
+  border-radius: 14px;
+  padding: 12px 20px;
+  font-weight: 700;
+}
+
+.btn-cancel {
+  background: #eef1f4;
+}
+
+.btn-save {
+  background: #0d6efd;
+  color: #fff;
+}
+
+@media (max-width: 991.98px) {
+
+  .custom-card {
+    padding: 18px;
+    border-radius: 20px;
+  }
+
+  .page-title {
+    font-size: 22px;
+  }
+
+  .user-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .item-actions {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .btn-action,
+  .btn-create {
+    width: 100%;
+  }
 }
 </style>

@@ -11,8 +11,9 @@ import NlpTrainView from '../views/NlpTrainView.vue';
 import EventsMapView from '../views/EventsMapView.vue';
 import PocketGisView from '../views/PocketGisView.vue';
 import RegionsPolygonView from '../views/RegionsPolygonView.vue';
-import PocketGisCategoriesView from '../views/PocketGisCategoriesView.vue';
 import ZonePreviewView from '../views/ZonePreviewView.vue';
+import HelpRequestsView from '../views/HelpRequestsView.vue';
+import EventClassificationView from '../views/EventClassificationView.vue';
 import LoginView from "../views/LoginView.vue";
 import { useAuthStore } from "@/stores/auth";
 
@@ -38,11 +39,18 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
-      path: "/alert_categories",
-      name: "AlertCategoryView",
+      path: "/categories",
+      name: "EventCategoriesView",
+      component: EventClassificationView,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: "/parsing-categories",
+      name: "ParsingCategoriesView",
       component: AlertCategoryView,
       meta: { requiresAuth: true },
     },
+    { path: "/alert_categories", redirect: "/parsing-categories" },
     {
       path: "/locations",
       name: "LocationView",
@@ -91,12 +99,7 @@ const router = createRouter({
       component: RegionsPolygonView,
       meta: { requiresAuth: true },
     },
-    {
-      path: "/pocketgis-categories",
-      name: "PocketGisCategoriesView",
-      component: PocketGisCategoriesView,
-      meta: { requiresAuth: true },
-    },
+    { path: "/pocketgis-categories", redirect: "/categories" },
     {
       path: "/zone-preview",
       name: "ZonePreviewView",
@@ -109,6 +112,13 @@ const router = createRouter({
       component: NlpTrainView,
       meta: { requiresAuth: true },
     },
+    {
+      path: "/help-requests",
+      name: "HelpRequestsView",
+      component: HelpRequestsView,
+      meta: { requiresAuth: true },
+    },
+    { path: "/event-classification", redirect: "/categories" },
     { path: "/:pathMatch(.*)*", redirect: "/parser" },
   ],
 })

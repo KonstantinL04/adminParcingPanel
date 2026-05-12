@@ -186,251 +186,493 @@ onUnmounted(() => {
 </script>
 
 <template>
-    <div class="container-fluid p-3">
+    <div class="page-wrap">
 
-        <!-- Управление парсером -->
-        <div class="mb-4">
-            <h4>Управление Telethon-парсером</h4>
-            <button class="btn btn-success me-2" :disabled="parserRunning || parserBusy" @click="startParser">▶ Запустить
-                парсер</button>
-            <button class="btn btn-danger" :disabled="!parserRunning || parserBusy" @click="stopParser">⏹ Остановить парсер</button>
-            <p class="mt-2">
-                <strong>Статус:</strong>
-                <span :class="parserRunning ? 'text-success' : 'text-danger'">
-                    {{ parserRunning ? "Запущен" : "Остановлен" }}
-                </span>
-            </p>
-            <p v-if="parserError" class="text-danger mb-0">{{ parserError }}</p>
+        <!-- HEADER -->
+
+        <div class="page-header mb-4">
+
+            <div>
+                <h2 class="page-title">
+                    <i class="bi bi-cpu-fill me-2"></i>
+                    Управление парсером
+                </h2>
+
+                <div class="page-subtitle">
+                    Мониторинг сообщений Telethon-парсера
+                </div>
+            </div>
+
         </div>
 
-        <!-- Вкладки -->
-        <ul class="nav nav-tabs mb-3">
-            <li class="nav-item">
-                <button class="nav-link" :class="{ active: activeTab === 'messages' }"
-                    @click="activeTab = 'messages'">Сообщения</button>
-            </li>
-            <li class="nav-item">
-                <button class="nav-link" :class="{ active: activeTab === 'road-events' }"
-                    @click="activeTab = 'road-events'">Дорожные события</button>
-            </li>
-            <li class="nav-item">
-                <button class="nav-link" :class="{ active: activeTab === 'relevance' }"
-                    @click="activeTab = 'relevance'">Актуальность</button>
-            </li>
-        </ul>
+        <!-- PARSER -->
 
-        <!-- Контент вкладок -->
-        <div v-if="activeTab === 'messages'">
-            <div class="d-flex align-items-center justify-content-between gap-2">
-                <h5 class="mb-0">Спаршенные сообщения</h5>
+        <div class="custom-card mb-4">
+
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+
+                <div>
+
+                    <div class="card-title-custom mb-2">
+                        Telethon Parser
+                    </div>
+
+                    <div
+                        class="parser-status"
+                        :class="parserRunning ? 'running' : 'stopped'"
+                    >
+                        <i
+                            class="bi"
+                            :class="parserRunning ? 'bi-play-circle-fill' : 'bi-stop-circle-fill'"
+                        ></i>
+
+                        {{ parserRunning ? "Парсер запущен" : "Парсер остановлен" }}
+                    </div>
+
+                    <div
+                        v-if="parserError"
+                        class="custom-alert mt-3"
+                    >
+                        {{ parserError }}
+                    </div>
+
+                </div>
+
+                <div class="d-flex gap-2">
+
+                    <button
+                        class="btn-parser btn-start"
+                        :disabled="parserRunning || parserBusy"
+                        @click="startParser"
+                    >
+                        <i class="bi bi-play-fill me-2"></i>
+                        Запустить
+                    </button>
+
+                    <button
+                        class="btn-parser btn-stop"
+                        :disabled="!parserRunning || parserBusy"
+                        @click="stopParser"
+                    >
+                        <i class="bi bi-stop-fill me-2"></i>
+                        Остановить
+                    </button>
+
+                </div>
+
+            </div>
+
+        </div>
+
+        <!-- MESSAGES -->
+
+        <div class="custom-card">
+
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-4">
+
+                <div>
+
+                    <div class="card-title-custom mb-1">
+                        Спаршенные сообщения
+                    </div>
+
+                    <div class="page-subtitle">
+                        Всего сообщений: {{ sortedMessages.length }}
+                    </div>
+
+                </div>
+
                 <button
-                    class="btn btn-outline-secondary btn-sm"
+                    class="btn-filter"
                     data-bs-toggle="modal"
                     data-bs-target="#messageFilterModal"
                 >
+                    <i class="bi bi-funnel-fill me-2"></i>
                     Фильтр
                 </button>
-            </div>
-            <div v-if="!sortedMessages.length" class="text-muted">Сообщений пока нет</div>
 
-            <div v-else class="mt-3">
-                <div v-for="msg in sortedMessages" :key="msg.telegram_message_id" class="message-item">
+            </div>
+
+            <div
+                v-if="!sortedMessages.length"
+                class="empty-box"
+            >
+                <i class="bi bi-chat-left-text"></i>
+
+                <div class="mt-2">
+                    Сообщений пока нет
+                </div>
+            </div>
+
+            <div v-else>
+
+                <div
+                    v-for="msg in sortedMessages"
+                    :key="msg.telegram_message_id"
+                    class="message-item"
+                >
+
                     <div class="message-head">
-                        <div class="message-chat">{{ msg.chat_title || "Без чата" }}</div>
-                        <div class="message-date">{{ formatDate(msg.created_at) }}</div>
+
+                        <div>
+
+                            <div class="message-chat">
+                                {{ msg.chat_title || "Без чата" }}
+                            </div>
+
+                            <div class="message-author">
+                                <i class="bi bi-person-circle me-1"></i>
+                                {{ msg.author_name || "Неизвестный автор" }}
+                            </div>
+
+                        </div>
+
+                        <div class="message-date">
+                            {{ formatDate(msg.created_at) }}
+                        </div>
+
                     </div>
 
-                    <div class="message-body">{{ msg.text || "-" }}</div>
+                    <div class="message-body">
+                        {{ msg.text || "-" }}
+                    </div>
 
                     <div class="message-meta">
-                        <span><b>ID:</b> {{ msg.telegram_message_id }}</span>
-                        <span><b>Автор:</b> {{ msg.author_name || "-" }}</span>
-                        <span><b>Категория:</b> {{ msg.category_name || "-" }}</span>
+
+                        <span class="message-badge">
+                            <b>ID:</b>&nbsp;{{ msg.telegram_message_id }}
+                        </span>
+
+                        <span class="message-badge">
+                            <b>Категория:</b>&nbsp;{{ msg.category_name || "-" }}
+                        </span>
+
                     </div>
+
                 </div>
+
             </div>
+
         </div>
 
-        <div v-if="activeTab === 'road-events'">
-            <h5>Дорожные события</h5>
-            <table class="table table-striped table-bordered">
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Категория</th>
-                        <th>Координаты</th>
-                        <th>Статус</th>
-                        <th>Подтв.</th>
-                        <th>Источник</th>
-                        <th>Создано</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr v-for="ev in roadEvents" :key="ev.id">
-                        <td>{{ ev.id }}</td>
-                        <td>{{ ev.category_label || ev.category_code }}</td>
-                        <td>
-                            <a href="#" data-bs-toggle="modal" data-bs-target="#eventMapModal" @click.prevent="openEventMap(ev)">
-                                {{ ev.location?.coordinates?.[1] }}, {{ ev.location?.coordinates?.[0] }}
-                            </a>
-                        </td>
-                        <td>{{ ev.status }}</td>
-                        <td>{{ ev.confirmations }}</td>
-                        <td>{{ ev.source }}</td>
-                        <td>{{ formatDate(ev.created_at) }}</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
+        <!-- FILTER MODAL -->
 
-        <div v-if="activeTab === 'relevance'">
-            <h5>Актуальность событий</h5>
-            <table class="table table-striped table-bordered">
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Категория</th>
-                        <th>Статус</th>
-                        <th>Подтв.</th>
-                        <th>Valid until</th>
-                        <th>Осталось</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr v-for="ev in roadEvents" :key="ev.id">
-                        <td>{{ ev.id }}</td>
-                        <td>{{ ev.category_label || ev.category_code }}</td>
-                        <td>{{ ev.status }}</td>
-                        <td>{{ ev.confirmations }}</td>
-                        <td>{{ formatDate(ev.valid_until) }}</td>
-                        <td>{{ timeLeft(ev.valid_until) }}</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
+        <div
+            class="modal fade"
+            id="messageFilterModal"
+            tabindex="-1"
+        >
+            <div class="modal-dialog modal-dialog-centered">
 
-        <!-- Map modal -->
-        <div class="modal fade" id="eventMapModal" tabindex="-1">
-            <div class="modal-dialog modal-lg">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">Место события</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <div class="modal-content custom-modal">
+
+                    <div class="modal-header border-0 pb-0">
+
+                        <h5 class="modal-title fw-bold">
+                            Фильтрация сообщений
+                        </h5>
+
+                        <button
+                            type="button"
+                            class="btn-close"
+                            data-bs-dismiss="modal"
+                        ></button>
+
                     </div>
+
                     <div class="modal-body">
-                        <div v-if="eventMapUrl">
-                            <iframe :src="eventMapUrl" width="100%" height="400" style="border:0;"></iframe>
-                        </div>
-                        <div v-else class="text-muted">Нет координат</div>
-                    </div>
-                </div>
-            </div>
-        </div>
 
-        <!-- Message filter modal -->
-        <div class="modal fade" id="messageFilterModal" tabindex="-1">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">Фильтрация сообщений</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <div class="mb-2">
-                            <label class="form-label">Категория</label>
-                            <select class="form-select" v-model="messageFilterCategory">
-                                <option value="">Все категории</option>
-                                <option v-for="cat in messageCategories" :key="cat" :value="cat">{{ cat }}</option>
+                        <div class="mb-3">
+
+                            <label class="form-label">
+                                Категория
+                            </label>
+
+                            <select
+                                class="form-select custom-input"
+                                v-model="messageFilterCategory"
+                            >
+                                <option value="">
+                                    Все категории
+                                </option>
+
+                                <option
+                                    v-for="cat in messageCategories"
+                                    :key="cat"
+                                    :value="cat"
+                                >
+                                    {{ cat }}
+                                </option>
+
                             </select>
+
                         </div>
-                        <div class="mb-2">
-                            <label class="form-label">Чат</label>
-                            <select class="form-select" v-model="messageFilterChat">
-                                <option value="">Все чаты</option>
-                                <option v-for="chat in messageChats" :key="chat" :value="chat">{{ chat }}</option>
+
+                        <div class="mb-3">
+
+                            <label class="form-label">
+                                Чат
+                            </label>
+
+                            <select
+                                class="form-select custom-input"
+                                v-model="messageFilterChat"
+                            >
+                                <option value="">
+                                    Все чаты
+                                </option>
+
+                                <option
+                                    v-for="chat in messageChats"
+                                    :key="chat"
+                                    :value="chat"
+                                >
+                                    {{ chat }}
+                                </option>
+
                             </select>
+
                         </div>
-                        <div>
-                            <label class="form-label">Автор</label>
+
+                        <div class="mb-3">
+
+                            <label class="form-label">
+                                Автор
+                            </label>
+
                             <input
                                 v-model="messageFilterAuthor"
                                 type="text"
-                                class="form-control"
+                                class="form-control custom-input"
                                 placeholder="Введите имя автора"
                             />
+
                         </div>
-                        <div class="row g-2 mt-1">
+
+                        <div class="row g-3">
+
                             <div class="col-6">
-                                <label class="form-label">Дата с</label>
-                                <input v-model="messageFilterDateFrom" type="date" class="form-control" />
+
+                                <label class="form-label">
+                                    Дата с
+                                </label>
+
+                                <input
+                                    v-model="messageFilterDateFrom"
+                                    type="date"
+                                    class="form-control custom-input"
+                                />
+
                             </div>
+
                             <div class="col-6">
-                                <label class="form-label">Дата по</label>
-                                <input v-model="messageFilterDateTo" type="date" class="form-control" />
+
+                                <label class="form-label">
+                                    Дата по
+                                </label>
+
+                                <input
+                                    v-model="messageFilterDateTo"
+                                    type="date"
+                                    class="form-control custom-input"
+                                />
+
                             </div>
+
+                            <div class="col-6">
+
+                                <label class="form-label">
+                                    Время с
+                                </label>
+
+                                <input
+                                    v-model="messageFilterTimeFrom"
+                                    type="time"
+                                    class="form-control custom-input"
+                                />
+
+                            </div>
+
+                            <div class="col-6">
+
+                                <label class="form-label">
+                                    Время по
+                                </label>
+
+                                <input
+                                    v-model="messageFilterTimeTo"
+                                    type="time"
+                                    class="form-control custom-input"
+                                />
+
+                            </div>
+
                         </div>
-                        <div class="row g-2 mt-1">
-                            <div class="col-6">
-                                <label class="form-label">Время с</label>
-                                <input v-model="messageFilterTimeFrom" type="time" class="form-control" />
-                            </div>
-                            <div class="col-6">
-                                <label class="form-label">Время по</label>
-                                <input v-model="messageFilterTimeTo" type="time" class="form-control" />
-                            </div>
-                        </div>
+
                     </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-outline-secondary" @click="resetMessageFilters">
+
+                    <div class="modal-footer border-0 pt-0">
+
+                        <button
+                            type="button"
+                            class="btn-cancel"
+                            @click="resetMessageFilters"
+                        >
                             Сбросить
                         </button>
-                        <button type="button" class="btn btn-primary" data-bs-dismiss="modal">
+
+                        <button
+                            type="button"
+                            class="btn-save"
+                            data-bs-dismiss="modal"
+                        >
                             Применить
                         </button>
+
                     </div>
+
                 </div>
+
             </div>
         </div>
+
     </div>
 </template>
 
 <style scoped>
-.table {
-    font-size: 0.9rem;
+.page-wrap {
+    padding: 8px 0 30px;
+}
+
+.page-title {
+    font-size: 28px;
+    font-weight: 800;
+    color: #111;
+    margin-bottom: 4px;
+}
+
+.page-subtitle {
+    color: #6c757d;
+    font-size: 15px;
+}
+
+.custom-card {
+    background: rgba(255,255,255,0.92);
+    backdrop-filter: blur(12px);
+    border-radius: 24px;
+    padding: 24px;
+    box-shadow: 0 10px 30px rgba(15,23,42,0.06);
+    border: 1px solid rgba(0,0,0,0.04);
+}
+
+.card-title-custom {
+    font-size: 18px;
+    font-weight: 800;
+    color: #111;
+}
+
+.parser-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border-radius: 999px;
+    padding: 10px 16px;
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.parser-status.running {
+    background: rgba(25,135,84,0.12);
+    color: #198754;
+}
+
+.parser-status.stopped {
+    background: rgba(220,53,69,0.12);
+    color: #dc3545;
+}
+
+.btn-parser {
+    border: 0;
+    border-radius: 14px;
+    padding: 12px 18px;
+    font-weight: 700;
+    transition: 0.2s ease;
+}
+
+.btn-start {
+    background: #198754;
+    color: #fff;
+}
+
+.btn-start:hover {
+    background: #157347;
+}
+
+.btn-stop {
+    background: #dc3545;
+    color: #fff;
+}
+
+.btn-stop:hover {
+    background: #bb2d3b;
+}
+
+.btn-filter {
+    border: 0;
+    background: rgba(13,110,253,0.1);
+    color: #0d6efd;
+    border-radius: 14px;
+    padding: 12px 18px;
+    font-weight: 700;
+    transition: 0.2s ease;
+}
+
+.btn-filter:hover {
+    background: #0d6efd;
+    color: #fff;
 }
 
 .message-item {
     display: flex;
     flex-direction: column;
-    gap: 0.45rem;
-    padding: 0.7rem 0.85rem;
-    margin: 0.55rem 0;
-    border: 1px solid #ddd;
-    border-radius: 8px;
+    gap: 14px;
+    padding: 22px;
+    margin-bottom: 16px;
+    border-radius: 22px;
     background: #fff;
+    border: 1px solid rgba(0,0,0,0.04);
+    box-shadow: 0 8px 24px rgba(15,23,42,0.05);
 }
 
 .message-head {
     display: flex;
     justify-content: space-between;
-    align-items: baseline;
-    gap: 1rem;
+    align-items: flex-start;
+    gap: 14px;
 }
 
 .message-chat {
-    font-weight: 600;
-    font-size: 1rem;
+    font-size: 18px;
+    font-weight: 800;
+    color: #111;
+}
+
+.message-author {
+    margin-top: 4px;
+    font-size: 14px;
+    color: #6c757d;
 }
 
 .message-date {
-    font-size: 0.85rem;
+    font-size: 13px;
     color: #6c757d;
     white-space: nowrap;
 }
 
 .message-body {
-    font-size: 0.95rem;
-    line-height: 1.3;
+    font-size: 15px;
+    line-height: 1.6;
+    color: #222;
     white-space: pre-wrap;
     word-break: break-word;
 }
@@ -438,8 +680,99 @@ onUnmounted(() => {
 .message-meta {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.9rem;
+    gap: 10px;
+}
+
+.message-badge {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    padding: 8px 12px;
+    background: #f4f7fb;
+    font-size: 13px;
+    font-weight: 600;
     color: #495057;
-    font-size: 0.85rem;
+}
+
+.empty-box {
+    padding: 60px 20px;
+    text-align: center;
+    border-radius: 20px;
+    background: #f8fafc;
+    color: #6c757d;
+    font-size: 16px;
+}
+
+.empty-box i {
+    font-size: 38px;
+}
+
+.custom-modal {
+    border: 0;
+    border-radius: 24px;
+    padding: 10px;
+}
+
+.custom-input {
+    border-radius: 14px;
+    border: 1px solid #dfe3e8;
+    padding: 11px 14px;
+    font-weight: 500;
+    box-shadow: none !important;
+}
+
+.custom-input:focus {
+    border-color: #0d6efd;
+}
+
+.btn-cancel,
+.btn-save {
+    border: 0;
+    border-radius: 14px;
+    padding: 12px 20px;
+    font-weight: 700;
+}
+
+.btn-cancel {
+    background: #eef1f4;
+}
+
+.btn-save {
+    background: #0d6efd;
+    color: #fff;
+}
+
+.custom-alert {
+    border: 0;
+    border-radius: 18px;
+    background: rgba(220,53,69,0.1);
+    color: #dc3545;
+    font-weight: 600;
+    padding: 14px 16px;
+}
+
+@media (max-width: 991.98px) {
+
+    .custom-card {
+        padding: 18px;
+        border-radius: 20px;
+    }
+
+    .page-title {
+        font-size: 22px;
+    }
+
+    .message-head {
+        flex-direction: column;
+    }
+
+    .message-date {
+        white-space: normal;
+    }
+
+    .btn-filter {
+        width: 100%;
+        justify-content: center;
+    }
 }
 </style>
