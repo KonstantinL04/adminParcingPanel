@@ -4,6 +4,8 @@ from rest_framework.routers import DefaultRouter
 from .api import (
     EventClassViewSet,
     EventClassItemViewSet,
+    WeatherViewSet,
+    MapSearchViewSet,
     MapEventViewSet,
     EntityVoteViewSet,
     PocketGisSourceViewSet,
@@ -15,6 +17,8 @@ router = DefaultRouter()
 # Каталог событий
 router.register("event-classes", EventClassViewSet, basename="event-classes")
 router.register("event-class-items", EventClassItemViewSet, basename="event-class-items")
+router.register("weather", WeatherViewSet, basename="weather")
+router.register("map-search", MapSearchViewSet, basename="map-search")
 
 # Точки на карте (единый endpoint)
 router.register("events", MapEventViewSet, basename="events")

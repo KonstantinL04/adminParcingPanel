@@ -35,24 +35,46 @@ class ExcludedUser(models.Model):
 
 # ✔ Категории
 class AlertCategory(models.Model):
-    name = models.CharField(max_length=50, unique=True)
-    image = models.ImageField(upload_to="category_icons/", null=True, blank=True)
-
+    category_id = models.PositiveIntegerField(null=True, blank=True, db_index=True)
+    category_name = models.CharField(max_length=128, blank=True, default="")
+    class_name = models.CharField(max_length=128, blank=True, default="")
     text_patterns = models.JSONField(default=list, blank=True)
     emoji_patterns = models.JSONField(default=list, blank=True)
-    ttl_minutes  = models.PositiveIntegerField(default=60)
-    confirm_threshold = models.IntegerField(default=3)
-    deny_threshold = models.IntegerField(default=-3)
-
     enabled = models.BooleanField(default=True)
 
+    class Meta:
+        ordering = ["class_name", "category_name", "id"]
+
     def __str__(self):
-        return self.name
+        return self.category_name or f"Category #{self.category_id}" if self.category_id else "Parsing category"
+
+
+class ParsedMessage(models.Model):
+    # Спарсенные сообщения из Telegram
+    telegram_message_id = models.BigIntegerField()
+    chat = models.ForeignKey(Chat, on_delete=models.PROTECT, related_name="parsed_messages")
+    parsing_category = models.ForeignKey(
+        AlertCategory,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="parsed_messages",
+    )
+    author_id = models.BigIntegerField(null=True, blank=True)
+    author_name = models.CharField(max_length=255, blank=True)
+    text = models.TextField()
+    created_at = models.DateTimeField()
+    parsed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Telegram #{self.telegram_message_id}"
 
 # ✔ Регионы/области
 class Region(models.Model):
     name = models.CharField(max_length=100, unique=True)
-    boundary = gis_models.MultiPolygonField(srid=4326, null=True, blank=True)
 
     def __str__(self):
         return self.name
@@ -65,7 +87,6 @@ class City(models.Model):
         related_name="cities"
     )
     name = models.CharField(max_length=100)
-    boundary = gis_models.MultiPolygonField(srid=4326, null=True, blank=True)
 
     class Meta:
         unique_together = ("region", "name")
@@ -79,13 +100,6 @@ class Location(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     location = gis_models.PointField(null=True, blank=True)
     synonyms = models.JSONField(default=list)
-    chat = models.ForeignKey(
-        Chat,
-        null=True,
-        blank=True,
-        on_delete=models.PROTECT,
-        related_name="locations"
-    )
     chats = models.ManyToManyField(
         Chat,
         blank=True,

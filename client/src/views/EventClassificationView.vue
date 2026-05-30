@@ -13,9 +13,7 @@ const itemForm = ref({
   event_class: "",
   name: "",
   source_kind: "static",
-  source_key: "",
   ttl_minutes: 60,
-  details_template: "",
   sort_order: 0,
   enabled: true,
   icon: null,
@@ -29,9 +27,7 @@ const itemEditForm = ref({
   event_class: "",
   name: "",
   source_kind: "static",
-  source_key: "",
   ttl_minutes: 60,
-  details_template: "",
   sort_order: 0,
   enabled: true,
   icon: null,
@@ -146,11 +142,9 @@ async function createItem() {
     fd.append("event_class", String(Number(itemForm.value.event_class)));
     fd.append("name", itemForm.value.name || "");
     fd.append("source_kind", itemForm.value.source_kind);
-    fd.append("source_key", itemForm.value.source_key || "");
     if (itemForm.value.source_kind === "dynamic") {
       fd.append("ttl_minutes", String(Number(itemForm.value.ttl_minutes || 60)));
     }
-    fd.append("details_template", itemForm.value.details_template || "");
     fd.append("sort_order", String(Number(itemForm.value.sort_order || 0)));
     fd.append("enabled", itemForm.value.enabled ? "true" : "false");
     if (itemForm.value.icon) fd.append("icon", itemForm.value.icon);
@@ -159,9 +153,7 @@ async function createItem() {
       event_class: "",
       name: "",
       source_kind: "static",
-      source_key: "",
       ttl_minutes: 60,
-      details_template: "",
       sort_order: 0,
       enabled: true,
       icon: null,
@@ -220,9 +212,7 @@ function openEditItemModal(row) {
     event_class: String(row.event_class || ""),
     name: row.name || "",
     source_kind: row.source_kind || "static",
-    source_key: row.source_key || "",
     ttl_minutes: Number(row.ttl_minutes || 60),
-    details_template: row.details_template || "",
     sort_order: Number(row.sort_order || 0),
     enabled: !!row.enabled,
     icon: null,
@@ -242,11 +232,9 @@ async function saveEditItem() {
   fd.append("event_class", String(Number(itemEditForm.value.event_class)));
   fd.append("name", itemEditForm.value.name || "");
   fd.append("source_kind", itemEditForm.value.source_kind);
-  fd.append("source_key", itemEditForm.value.source_key || "");
   if (itemEditForm.value.source_kind === "dynamic") {
     fd.append("ttl_minutes", String(Number(itemEditForm.value.ttl_minutes || 60)));
   }
-  fd.append("details_template", itemEditForm.value.details_template || "");
   fd.append("sort_order", String(Number(itemEditForm.value.sort_order || 0)));
   fd.append("enabled", itemEditForm.value.enabled ? "true" : "false");
   if (itemEditForm.value.clear_icon) fd.append("icon", "");
@@ -442,10 +430,6 @@ onUnmounted(() => {
           </div>
         </div>
         <div class="col-lg-2">
-          <label class="form-label">Код источника</label>
-          <input class="form-control custom-input" v-model="itemForm.source_key" placeholder="Опционально" />
-        </div>
-        <div class="col-lg-2">
           <label class="form-label">Порядок</label>
           <div class="main-dropdown" :ref="el => setDropdownRef('itemSort', el)">
             <button
@@ -476,10 +460,6 @@ onUnmounted(() => {
               <span v-else class="text-muted">Выберите иконку</span>
             </label>
           </div>
-        </div>
-        <div class="col-lg-3">
-          <label class="form-label">Шаблон детали</label>
-          <input class="form-control custom-input" v-model="itemForm.details_template" placeholder="Например: {time}" />
         </div>
         <div class="col-lg-2 d-flex align-items-end gap-3">
           <div class="form-check mb-2">
@@ -568,7 +548,6 @@ onUnmounted(() => {
                       <div class="item-row-meta">
                         <span class="item-kind">{{ item.source_kind === 'static' ? 'Статический' : 'Динамический'
                         }}</span>
-                        <span v-if="item.source_key" class="item-key">Код: {{ item.source_key }}</span>
                         <span class="item-order">Порядок: {{ item.sort_order }}</span>
                       </div>
                     </div>
@@ -726,10 +705,6 @@ onUnmounted(() => {
                 </div>
               </div>
               <div class="mb-3">
-                <label class="form-label">Код источника</label>
-                <input class="form-control custom-input" v-model="itemEditForm.source_key" />
-              </div>
-              <div class="mb-3">
                 <label class="form-label">Порядок</label>
                 <div class="main-dropdown" :ref="el => setDropdownRef('editItemSort', el)">
                   <button
@@ -760,10 +735,6 @@ onUnmounted(() => {
                     <span v-else class="text-muted">Выберите новую иконку</span>
                   </label>
                 </div>
-              </div>
-              <div class="mb-3">
-                <label class="form-label">Шаблон детали</label>
-                <input class="form-control custom-input" v-model="itemEditForm.details_template" />
               </div>
               <div class="mb-3">
                 <div class="form-check">

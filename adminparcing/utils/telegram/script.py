@@ -26,9 +26,7 @@ from asgiref.sync import sync_to_async
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "app.settings")
 django.setup()
 
-from adminparcing.models import Chat, ExcludedUser, SettingAPI
-from events.models import EventClassItem
-from adminparcing.services.event_client import send_parsed_message
+from adminparcing.models import AlertCategory, Chat, ExcludedUser, ParsedMessage, SettingAPI
 
 # ─────────────────────────────────────────────────────────────
 # CONFIG
@@ -107,12 +105,16 @@ def load_categories():
     category_map = {}
     text_patterns = {}
     emoji_groups = {}
-    for cat in EventClassItem.objects.filter(enabled=True, source_kind=EventClassItem.SOURCE_DYNAMIC):
-        category_map[cat.name] = {"id": cat.id, "name": cat.name}
-        if cat.text_patterns:
-            text_patterns[cat.name] = cat.text_patterns
-        if cat.emoji_patterns:
-            emoji_groups[cat.name] = cat.emoji_patterns
+    rules = AlertCategory.objects.filter(enabled=True, category_id__isnull=False)
+    for rule in rules:
+        if not rule.category_id:
+            continue
+        name = rule.category_name or f"category_{rule.category_id}"
+        category_map[name] = {"id": rule.category_id, "name": name, "parsing_category_id": rule.id}
+        if rule.text_patterns:
+            text_patterns[name] = rule.text_patterns
+        if rule.emoji_patterns:
+            emoji_groups[name] = rule.emoji_patterns
     return category_map, text_patterns, emoji_groups
 
 TARGET_CHATS: List[Any] = []
@@ -319,7 +321,7 @@ def pull_recent_unclassified(chat_key, sender_id) -> str:
         recent_unclassified_by_chat[chat_key] = buf
     return pulled_text
 
-def maybe_merge_with_previous(chat_key, sender_id, combined_text, category, author, payload) -> bool:
+async def maybe_merge_with_previous(chat_key, sender_id, combined_text, category, author, payload) -> bool:
     prev_saved = last_classified_by_author.get((chat_key, sender_id))
     if prev_saved:
         prev_payload = prev_saved.get("payload")
@@ -327,7 +329,7 @@ def maybe_merge_with_previous(chat_key, sender_id, combined_text, category, auth
         if not prev_cat:
             prev_payload["text"] += " " + combined_text
             prev_payload["category"] = CATEGORY_MAP.get(category, {}).get("id")
-            send_parsed_message(prev_payload)
+            await sync_to_async(save_parsed_message)(prev_payload, category)
             last_classified_by_author[(chat_key, sender_id)] = {
                 "payload": prev_payload,
                 "text": prev_payload["text"],
@@ -337,6 +339,21 @@ def maybe_merge_with_previous(chat_key, sender_id, combined_text, category, auth
             print(f"↩️ Объединено с предыдущим сообщением автора {author}")
             return True
     return False
+
+
+def save_parsed_message(payload, category_name):
+    parsing_category_id = CATEGORY_MAP.get(category_name, {}).get("parsing_category_id")
+    ParsedMessage.objects.update_or_create(
+        telegram_message_id=payload["telegram_message_id"],
+        chat_id=payload["chat"],
+        defaults={
+            "parsing_category_id": parsing_category_id,
+            "author_id": payload.get("author_id"),
+            "author_name": payload.get("author_name", ""),
+            "text": payload.get("text", ""),
+            "created_at": payload["created_at"],
+        },
+    )
 
 # ─────────────────────────────────────────────────────────────
 # Telegram client
@@ -391,10 +408,10 @@ async def handler(event):
         "created_at": event.message.date.isoformat(),
     }
 
-    if maybe_merge_with_previous(chat_key, sender_id, combined_text, category_name, author, payload):
+    if await maybe_merge_with_previous(chat_key, sender_id, combined_text, category_name, author, payload):
         return
 
-    send_parsed_message(payload)
+    await sync_to_async(save_parsed_message)(payload, category_name)
     last_classified_by_author[(chat_key, sender_id)] = {
         "payload": payload,
         "text": combined_text,

@@ -58,8 +58,7 @@ async function fetchLocations() {
     locations.value = (r.data.features || []).map((f) => {
         const props = f.properties || {};
         const m2mChats = Array.isArray(props.chats) ? props.chats : [];
-        const fallbackChat = props.chat ? [props.chat] : [];
-        const chatIds = normalizeIdArray([...m2mChats, ...fallbackChat]);
+        const chatIds = normalizeIdArray(m2mChats);
 
         return {
             id: f.id,

@@ -9,6 +9,11 @@ export const useAuthStore = defineStore("auth", {
 
   getters: {
     isAuthenticated: (state) => !!state.user,
+    roleNames: (state) => new Set(state.user?.roles || []),
+    isModerator: (state) => {
+      const roles = new Set(state.user?.roles || []);
+      return !!state.user && (state.user.is_superuser || state.user.is_staff || roles.has("moderator") || roles.has("admin"));
+    },
   },
 
   actions: {

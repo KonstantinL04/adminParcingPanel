@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from adminparcing.models import Chat, ExcludedUser, AlertCategory, Region, City, Location, Route, RoutePoint, Setting, SettingAPI
+from adminparcing.services.event_client import get_event_category
 from rest_framework_gis.serializers import GeoFeatureModelSerializer
-import json
 import re
 from django.db import IntegrityError, transaction
 
@@ -28,19 +28,38 @@ class ExcludedUserSerializer(serializers.ModelSerializer):
         fields = "__all__"
         
 class AlertCategorySerializer(serializers.ModelSerializer):
+    category = serializers.IntegerField(source="category_id", required=False, allow_null=True)
+
     class Meta:
         model = AlertCategory
         fields = [
             "id",
-            "name",
-            "image",
+            "category",
+            "category_name",
+            "class_name",
             "text_patterns",
             "emoji_patterns",
-            "ttl_minutes",
-            "confirm_threshold",
-            "deny_threshold",
             "enabled",
         ]
+
+    def _fill_category_snapshot(self, attrs):
+        category_id = attrs.get("category_id")
+        if not category_id:
+            attrs["category_name"] = ""
+            attrs["class_name"] = ""
+            return attrs
+        category = get_event_category(category_id) or {}
+        attrs["category_name"] = category.get("name", "")
+        attrs["class_name"] = category.get("class_name", "")
+        return attrs
+
+    def create(self, validated_data):
+        return super().create(self._fill_category_snapshot(validated_data))
+
+    def update(self, instance, validated_data):
+        if "category_id" in validated_data:
+            validated_data = self._fill_category_snapshot(validated_data)
+        return super().update(instance, validated_data)
 
     def validate_text_patterns(self, value):
         if not isinstance(value, list):
@@ -59,23 +78,9 @@ class AlertCategorySerializer(serializers.ModelSerializer):
         return value
 
 class RegionSerializer(serializers.ModelSerializer):
-    has_boundary = serializers.SerializerMethodField()
-    boundary_geojson = serializers.SerializerMethodField()
-
-    def get_has_boundary(self, obj):
-        return bool(obj.boundary)
-
-    def get_boundary_geojson(self, obj):
-        if not obj.boundary:
-            return None
-        try:
-            return json.loads(obj.boundary.geojson)
-        except Exception:
-            return None
-
     class Meta:
         model = Region
-        fields = ("id", "name", "has_boundary", "boundary_geojson")
+        fields = ("id", "name")
 
 class CitySerializer(serializers.ModelSerializer):
     region_name = serializers.CharField(source="region.name", read_only=True)
@@ -91,18 +96,12 @@ class LocationSerializer(GeoFeatureModelSerializer):
         required=False
     )
     chat_titles = serializers.SerializerMethodField()
-    chat_title = serializers.CharField(source="chat.title", read_only=True)
     city_name = serializers.CharField(source="city.name", read_only=True)
     region_name = serializers.CharField(source="city.region.name", read_only=True)
     region_id = serializers.IntegerField(source="city.region_id", read_only=True)
 
     def get_chat_titles(self, obj):
-        titles = list(obj.chats.values_list("title", flat=True))
-        if titles:
-            return titles
-        if obj.chat_id:
-            return [obj.chat.title]
-        return []
+        return list(obj.chats.values_list("title", flat=True))
 
     class Meta:
         model = Location
@@ -112,9 +111,7 @@ class LocationSerializer(GeoFeatureModelSerializer):
             "created_at",
             "name",
             "synonyms",
-            "chat",
             "chats",
-            "chat_title",
             "chat_titles",
             "city",
             "city_name",
@@ -127,9 +124,6 @@ class LocationSerializer(GeoFeatureModelSerializer):
         location = super().create(validated_data)
         if chats:
             location.chats.set(chats)
-            if not location.chat_id:
-                location.chat = chats[0]
-                location.save(update_fields=["chat"])
         return location
 
     def update(self, instance, validated_data):
@@ -137,9 +131,6 @@ class LocationSerializer(GeoFeatureModelSerializer):
         location = super().update(instance, validated_data)
         if chats is not None:
             location.chats.set(chats)
-            if not location.chat_id and chats:
-                location.chat = chats[0]
-                location.save(update_fields=["chat"])
         return location
         
 class RoutePointSerializer(serializers.ModelSerializer):
@@ -218,8 +209,6 @@ class RouteCreateSerializer(serializers.ModelSerializer):
         if not chat_ids:
             return True
         loc_chat_ids = set(location.chats.values_list("id", flat=True))
-        if location.chat_id:
-            loc_chat_ids.add(location.chat_id)
         return bool(loc_chat_ids.intersection(chat_ids))
 
     def validate(self, attrs):

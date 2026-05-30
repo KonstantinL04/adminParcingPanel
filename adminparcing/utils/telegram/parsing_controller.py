@@ -5,7 +5,7 @@ import time
 from adminparcing.utils.nlp.NLPModel import reload_nlp_data
 from adminparcing.utils.nlp.resolve_locations import process_new_messages
 from adminparcing.utils.telegram.script import prepare_runtime, qr_login, start_client, stop_client
-from adminparcing.services.event_status import expire_events
+from adminparcing.services.event_client import expire_dynamic_events
 
 class ParserController:
     def __init__(self):
@@ -63,7 +63,7 @@ class ParserController:
         while not self.loc_stop.is_set():
             try:
                 process_new_messages()
-                expire_events()
+                expire_dynamic_events()
             except Exception as e:
                 print(f"❌ Location resolver error: {e!r}")
             time.sleep(5)

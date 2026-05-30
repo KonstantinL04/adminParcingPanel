@@ -51,7 +51,10 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include(router.urls)),
     path("api/events/", include("events.urls")),
+    path("api/assistance/", include("assistance.urls")),
     path("api/accounts/", include("accounts.urls")),
+    path("api/moderation/", include("moderation.urls")),
+    path("api/notifications/", include("notifications.urls")),
 ]
 
 if settings.DEBUG:

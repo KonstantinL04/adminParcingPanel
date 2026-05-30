@@ -8,27 +8,20 @@ const loading = ref(false);
 const error = ref("");
 
 const form = ref({
-  event_class: "",
-  name: "",
+  category: "",
   text_patterns: "",
   emoji_patterns: "",
-  ttl_minutes: 60,
   enabled: true,
-  icon: null,
 });
 
 const editModalId = "editModal";
 
 const editForm = ref({
   id: null,
-  event_class: "",
-  name: "",
+  category: "",
   text_patterns: "",
   emoji_patterns: "",
-  ttl_minutes: 60,
   enabled: true,
-  icon: null,
-  current_icon: "",
 });
 
 function parseList(value) {
@@ -44,31 +37,19 @@ function resolveMediaUrl(path) {
   return path.startsWith("/") ? path : `/${path}`;
 }
 
-function onIconChange(e) {
-  form.value.icon = e.target.files?.[0] || null;
-}
-
-function onEditIconChange(e) {
-  editForm.value.icon = e.target.files?.[0] || null;
-}
-
 async function loadData() {
   loading.value = true;
   error.value = "";
 
   try {
     const [c, i] = await Promise.all([
-      axios.get("/api/events/event-classes/"),
       axios.get("/api/events/event-class-items/?source_kind=dynamic"),
+      axios.get("/api/alert_categories/"),
     ]);
 
-    classes.value = Array.isArray(c.data)
-      ? c.data
-      : c.data?.results || [];
+    classes.value = Array.isArray(c.data) ? c.data : c.data?.results || [];
 
-    items.value = Array.isArray(i.data)
-      ? i.data
-      : i.data?.results || [];
+    items.value = Array.isArray(i.data) ? i.data : i.data?.results || [];
   } catch (e) {
     error.value =
       e?.response?.data?.detail ||
@@ -80,58 +61,18 @@ async function loadData() {
 
 async function createItem() {
   try {
-    const fd = new FormData();
-
-    fd.append(
-      "event_class",
-      String(Number(form.value.event_class || 0))
-    );
-
-    fd.append("name", form.value.name || "");
-    fd.append("source_kind", "dynamic");
-
-    fd.append(
-      "text_patterns",
-      JSON.stringify(parseList(form.value.text_patterns))
-    );
-
-    fd.append(
-      "emoji_patterns",
-      JSON.stringify(parseList(form.value.emoji_patterns))
-    );
-
-    fd.append(
-      "ttl_minutes",
-      String(Number(form.value.ttl_minutes || 60))
-    );
-
-    fd.append(
-      "enabled",
-      form.value.enabled ? "true" : "false"
-    );
-
-    if (form.value.icon) {
-      fd.append("icon", form.value.icon);
-    }
-
-    await axios.post(
-      "/api/events/event-class-items/",
-      fd,
-      {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-      }
-    );
+    await axios.post("/api/alert_categories/", {
+      category: Number(form.value.category || 0),
+      text_patterns: parseList(form.value.text_patterns),
+      emoji_patterns: parseList(form.value.emoji_patterns),
+      enabled: form.value.enabled,
+    });
 
     form.value = {
-      event_class: "",
-      name: "",
+      category: "",
       text_patterns: "",
       emoji_patterns: "",
-      ttl_minutes: 60,
       enabled: true,
-      icon: null,
     };
 
     await loadData();
@@ -145,66 +86,25 @@ async function createItem() {
 function openEditModal(row) {
   editForm.value = {
     id: row.id,
-    event_class: row.event_class,
-    name: row.name,
+    category: row.category,
     text_patterns: Array.isArray(row.text_patterns)
       ? row.text_patterns.join(", ")
       : "",
     emoji_patterns: Array.isArray(row.emoji_patterns)
       ? row.emoji_patterns.join(", ")
       : "",
-    ttl_minutes: row.ttl_minutes,
     enabled: row.enabled,
-    icon: null,
-    current_icon: row.icon,
   };
 }
 
 async function saveEdit() {
   try {
-    const fd = new FormData();
-
-    fd.append(
-      "event_class",
-      String(Number(editForm.value.event_class || 0))
-    );
-
-    fd.append("name", editForm.value.name || "");
-    fd.append("source_kind", "dynamic");
-
-    fd.append(
-      "text_patterns",
-      JSON.stringify(parseList(editForm.value.text_patterns))
-    );
-
-    fd.append(
-      "emoji_patterns",
-      JSON.stringify(parseList(editForm.value.emoji_patterns))
-    );
-
-    fd.append(
-      "ttl_minutes",
-      String(Number(editForm.value.ttl_minutes || 60))
-    );
-
-    fd.append(
-      "enabled",
-      editForm.value.enabled ? "true" : "false"
-    );
-
-    if (editForm.value.icon) {
-      fd.append("icon", editForm.value.icon);
-    }
-
-    await axios.patch(
-      `/api/events/event-class-items/${editForm.value.id}/`,
-      fd,
-      {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-      }
-    );
+    await axios.patch(`/api/alert_categories/${editForm.value.id}/`, {
+      category: Number(editForm.value.category || 0),
+      text_patterns: parseList(editForm.value.text_patterns),
+      emoji_patterns: parseList(editForm.value.emoji_patterns),
+      enabled: editForm.value.enabled,
+    });
 
     document
       .querySelector(`#${editModalId}`)
@@ -220,7 +120,7 @@ async function saveEdit() {
 }
 
 async function removeRow(id) {
-  await axios.delete(`/api/events/event-class-items/${id}/`);
+  await axios.delete(`/api/alert_categories/${id}/`);
   await loadData();
 }
 
@@ -240,7 +140,7 @@ onMounted(async () => {
         </h2>
 
         <div class="page-subtitle">
-          Управление dynamic-категориями событий
+          Правила распознавания сообщений по категориям событий
         </div>
       </div>
     </div>
@@ -262,21 +162,15 @@ onMounted(async () => {
       <div class="row g-3">
 
         <div class="col-xl-2 col-lg-3">
-          <label class="form-label">Класс</label>
+          <label class="form-label">Категория события</label>
 
-          <select class="form-select custom-input" v-model="form.event_class">
+          <select class="form-select custom-input" v-model="form.category">
             <option value="">Выберите</option>
 
             <option v-for="c in classes" :key="c.id" :value="String(c.id)">
-              {{ c.name }}
+              {{ c.class_name }} / {{ c.name }}
             </option>
           </select>
-        </div>
-
-        <div class="col-xl-2 col-lg-3">
-          <label class="form-label">Название</label>
-
-          <input class="form-control custom-input" v-model="form.name" />
         </div>
 
         <div class="col-xl-3">
@@ -289,18 +183,6 @@ onMounted(async () => {
           <label class="form-label">Эмодзи</label>
 
           <input class="form-control custom-input" v-model="form.emoji_patterns" />
-        </div>
-
-        <div class="col-xl-1 col-lg-2">
-          <label class="form-label">TTL</label>
-
-          <input type="number" class="form-control custom-input" v-model.number="form.ttl_minutes" />
-        </div>
-
-        <div class="col-xl-2 col-lg-4">
-          <label class="form-label">Иконка</label>
-
-          <input type="file" accept="image/*" class="form-control custom-input" @change="onIconChange" />
         </div>
 
         <div class="col-12 d-flex justify-content-between align-items-center mt-2">
@@ -339,10 +221,10 @@ onMounted(async () => {
           <thead>
             <tr>
               <th>ID</th>
-              <th>Иконка</th>
-              <th>Название</th>
+              <th>Категория</th>
               <th>Класс</th>
-              <th>TTL</th>
+              <th>Слова</th>
+              <th>Эмодзи</th>
               <th>Статус</th>
               <th class="text-end">Действия</th>
             </tr>
@@ -362,31 +244,21 @@ onMounted(async () => {
               </td>
 
               <td>
-                <div class="icon-box">
-                  <img v-if="row.icon" :src="resolveMediaUrl(row.icon)" class="row-icon" alt="" />
-
-                  <i v-else class="bi bi-image text-muted"></i>
-                </div>
-              </td>
-
-              <td>
                 <div class="fw-semibold">
-                  {{ row.name }}
-                </div>
-
-                <div class="small text-muted">
-                  {{ row.text_patterns?.join(", ") }}
+                  {{ row.category_name }}
                 </div>
               </td>
 
               <td>
-                {{
-                  classes.find(x => x.id === row.event_class)?.name || "—"
-                }}
+                {{ row.class_name || "—" }}
               </td>
 
               <td>
-                {{ row.ttl_minutes }} мин
+                {{ row.text_patterns?.join(", ") || "—" }}
+              </td>
+
+              <td>
+                {{ row.emoji_patterns?.join(", ") || "—" }}
               </td>
 
               <td>
@@ -442,17 +314,11 @@ onMounted(async () => {
             <div class="row g-3">
 
               <div class="col-md-6">
-                <label class="form-label">Название</label>
+                <label class="form-label">Категория события</label>
 
-                <input class="form-control custom-input" v-model="editForm.name" />
-              </div>
-
-              <div class="col-md-6">
-                <label class="form-label">Класс</label>
-
-                <select class="form-select custom-input" v-model="editForm.event_class">
+                <select class="form-select custom-input" v-model="editForm.category">
                   <option v-for="c in classes" :key="c.id" :value="c.id">
-                    {{ c.name }}
+                    {{ c.class_name }} / {{ c.name }}
                   </option>
                 </select>
               </div>
@@ -469,18 +335,6 @@ onMounted(async () => {
                 <input class="form-control custom-input" v-model="editForm.emoji_patterns" />
               </div>
 
-              <div class="col-md-4">
-                <label class="form-label">TTL</label>
-
-                <input type="number" class="form-control custom-input" v-model.number="editForm.ttl_minutes" />
-              </div>
-
-              <div class="col-md-4">
-                <label class="form-label">Иконка</label>
-
-                <input type="file" accept="image/*" class="form-control custom-input" @change="onEditIconChange" />
-              </div>
-
               <div class="col-md-4 d-flex align-items-end">
 
                 <div class="form-check custom-check mb-2">
@@ -491,10 +345,6 @@ onMounted(async () => {
                   </label>
                 </div>
 
-              </div>
-
-              <div v-if="editForm.current_icon" class="col-12">
-                <img :src="resolveMediaUrl(editForm.current_icon)" class="preview-icon" />
               </div>
 
             </div>

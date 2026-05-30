@@ -11,8 +11,6 @@ from .models import (
     EntityVote,
     PocketGisSource,
     PocketGisImport,
-    HelpRequest,
-    HelpRequestResponse,
 )
 
 
@@ -47,18 +45,7 @@ class EventClassItemSerializer(serializers.ModelSerializer):
             "name",
             "icon",
             "source_kind",
-            "speed_limit",
-            "dir_type",
-            "direction",
-            "distance",
-            "angle",
             "ttl_minutes",
-            "supports_direction",
-            "supports_speed_limit",
-            "supports_distance",
-            "supports_angle",
-            "supports_zone_render",
-            "details_template",
             "sort_order",
             "enabled",
         ]
@@ -106,10 +93,14 @@ class EventMediaUploadSerializer(serializers.ModelSerializer):
 class MapEventListSerializer(serializers.ModelSerializer):
     """Список точек для карты"""
     category_name = serializers.SerializerMethodField()
+    class_name = serializers.SerializerMethodField()
     category_icon = serializers.SerializerMethodField()
 
     def get_category_name(self, obj):
         return getattr(obj.class_item, 'name', '') or ''
+
+    def get_class_name(self, obj):
+        return getattr(getattr(obj.class_item, "event_class", None), "name", "") or ""
 
     def get_category_icon(self, obj):
         icon = getattr(obj.class_item, 'icon', None)
@@ -135,6 +126,7 @@ class MapEventListSerializer(serializers.ModelSerializer):
             "location",
             "class_item",
             "category_name",
+            "class_name",
             "category_icon",
             "source_name",
             "speed_limit",
@@ -143,7 +135,12 @@ class MapEventListSerializer(serializers.ModelSerializer):
             "distance",
             "angle",
             "details",
+            "source",
+            "source_kind",
+            "status",
             "is_active",
+            "confirmations",
+            "denials",
             "first_seen_at",
             "last_seen_at",
         ]
@@ -153,18 +150,9 @@ class MapEventDetailSerializer(serializers.ModelSerializer):
     """Детальная информация о точке"""
     category_name = serializers.SerializerMethodField()
     media = EventMediaSerializer(many=True, read_only=True)
-    has_help_request = serializers.SerializerMethodField()
-    help_request_status = serializers.SerializerMethodField()
 
     def get_category_name(self, obj):
         return getattr(obj.class_item, 'name', '') or ''
-
-    def get_has_help_request(self, obj):
-        return hasattr(obj, 'help_request')
-
-    def get_help_request_status(self, obj):
-        hr = getattr(obj, 'help_request', None)
-        return hr.status if hr else None
 
     class Meta:
         model = MapEvent
@@ -191,8 +179,6 @@ class MapEventDetailSerializer(serializers.ModelSerializer):
             "last_seen_at",
             "created_at",
             "media",
-            "has_help_request",
-            "help_request_status",
         ]
 
 
@@ -214,6 +200,8 @@ class MapEventUpdateSerializer(serializers.ModelSerializer):
             "distance",
             "angle",
             "details",
+            "status",
+            "is_active",
         ]
 
 
@@ -222,7 +210,6 @@ class MapEventCreateSerializer(serializers.ModelSerializer):
     class_item = serializers.PrimaryKeyRelatedField(
         queryset=EventClassItem.objects.filter(enabled=True)
     )
-    is_help_request = serializers.BooleanField(default=False, write_only=True)
 
     class Meta:
         model = MapEvent
@@ -235,101 +222,22 @@ class MapEventCreateSerializer(serializers.ModelSerializer):
             "distance",
             "angle",
             "details",
-            "is_help_request",
         ]
 
     def create(self, validated_data):
-        is_help_request = validated_data.pop("is_help_request", False)
-
         max_idx = MapEvent.objects.filter(
             source_kind=MapEvent.SOURCE_STATIC
         ).aggregate(django_models.Max("external_idx")).get("external_idx__max") or 0
 
-        event = MapEvent.objects.create(
-            source_kind=MapEvent.SOURCE_DYNAMIC if is_help_request else MapEvent.SOURCE_STATIC,
+        return MapEvent.objects.create(
+            source_kind=MapEvent.SOURCE_STATIC,
             source="user",
-            external_idx=max_idx + 1 if not is_help_request else None,
-            source_object_id=f"manual-{max_idx + 1}" if not is_help_request else "",
+            external_idx=max_idx + 1,
+            source_object_id=f"manual-{max_idx + 1}",
             is_active=True,
-            status=MapEvent.STATUS_CONFIRMED if not is_help_request else MapEvent.STATUS_ACTIVE,
+            status=MapEvent.STATUS_CONFIRMED,
             **validated_data,
         )
-
-        # Если это запрос помощи — создаем HelpRequest
-        if is_help_request:
-            from django.utils import timezone
-            from datetime import timedelta
-
-            class_item = validated_data.get("class_item")
-            ttl = getattr(class_item, 'ttl_minutes', 120)
-
-            HelpRequest.objects.create(
-                event=event,
-                creator_user_id=self.context["request"].user.id if self.context["request"].user.is_authenticated else "anonymous",
-                auto_archive_at=timezone.now() + timedelta(minutes=ttl),
-            )
-
-        return event
-
-
-# ========== HELP REQUEST ==========
-
-class HelpRequestResponseSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = HelpRequestResponse
-        fields = [
-            "id",
-            "responder_user_id",
-            "accepted",
-            "chat_room_id",
-            "message",
-            "created_at",
-        ]
-        read_only_fields = ["accepted", "chat_room_id", "created_at"]
-
-
-class HelpRequestSerializer(serializers.ModelSerializer):
-    """Запрос помощи с откликами"""
-    responses = HelpRequestResponseSerializer(many=True, read_only=True)
-    event_details = serializers.CharField(source="event.details", read_only=True)
-    event_location = serializers.SerializerMethodField()
-    responses_count = serializers.SerializerMethodField()
-
-    def get_event_location(self, obj):
-        return {
-            "type": "Point",
-            "coordinates": [obj.event.location.x, obj.event.location.y],
-        }
-
-    def get_responses_count(self, obj):
-        return obj.responses.count()
-
-    class Meta:
-        model = HelpRequest
-        fields = [
-            "id",
-            "event",
-            "event_details",
-            "event_location",
-            "creator_user_id",
-            "status",
-            "auto_archive_at",
-            "closed_at",
-            "created_at",
-            "responses",
-            "responses_count",
-        ]
-
-
-class HelpRequestRespondSerializer(serializers.Serializer):
-    """Отклик на запрос помощи"""
-    user_id = serializers.CharField()
-    message = serializers.CharField(required=False, allow_blank=True, default="")
-
-
-class HelpRequestAcceptSerializer(serializers.Serializer):
-    """Принятие отклика"""
-    response_id = serializers.IntegerField()
 
 
 # ========== POCKETGIS ==========
@@ -366,7 +274,8 @@ class PocketGisImportSerializer(serializers.ModelSerializer):
 class EntityVoteSerializer(serializers.ModelSerializer):
     class Meta:
         model = EntityVote
-        fields = ["id", "vote", "user_id", "created_at"]
+        fields = ["id", "event", "vote", "user_id", "created_at"]
+        read_only_fields = ["event", "created_at"]
 
     def create(self, validated_data):
         request = self.context["request"]

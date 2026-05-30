@@ -9,9 +9,6 @@ from .models import (
     EntityVote,
     PocketGisSource,
     PocketGisImport,
-    HelpRequest,
-    HelpRequestResponse,
-    ParsedMessage,
 )
 
 
@@ -54,9 +51,9 @@ class EventMediaAdmin(admin.ModelAdmin):
 
 @admin.register(EntityVote)
 class EntityVoteAdmin(admin.ModelAdmin):
-    list_display = ["id", "content_type", "object_id", "user_id", "vote", "created_at"]
-    list_filter = ["vote", "content_type"]
-    search_fields = ["user_id"]
+    list_display = ["id", "event", "user_id", "vote", "created_at"]
+    list_filter = ["vote", "created_at"]
+    search_fields = ["user_id", "event__id"]
 
 
 @admin.register(PocketGisSource)
@@ -71,33 +68,3 @@ class PocketGisImportAdmin(admin.ModelAdmin):
     list_display = ["id", "source", "file_name", "status", "rows_total", "rows_inserted", "created_at"]
     list_filter = ["status", "created_at"]
     readonly_fields = ["created_at", "finished_at"]
-
-
-@admin.register(HelpRequest)
-class HelpRequestAdmin(admin.ModelAdmin):
-    list_display = ["id", "get_event_id", "creator_user_id", "status", "created_at"]
-    list_filter = ["status"]
-    search_fields = ["creator_user_id"]
-
-    def get_event_id(self, obj):
-        return obj.event_id
-    get_event_id.short_description = "Event ID"
-
-
-@admin.register(HelpRequestResponse)
-class HelpRequestResponseAdmin(admin.ModelAdmin):
-    list_display = ["id", "help_request", "responder_user_id", "get_accepted", "created_at"]
-    list_filter = ["help_request__status"]
-    search_fields = ["responder_user_id"]
-
-    def get_accepted(self, obj):
-        return getattr(obj, 'accepted', False)
-    get_accepted.short_description = "Accepted"
-    get_accepted.boolean = True
-
-
-@admin.register(ParsedMessage)
-class ParsedMessageAdmin(admin.ModelAdmin):
-    list_display = ["id", "chat", "author_name", "created_at", "parsed_at"]
-    list_filter = ["created_at"]
-    search_fields = ["text", "author_name"]

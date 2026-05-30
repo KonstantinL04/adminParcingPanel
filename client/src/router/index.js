@@ -4,16 +4,18 @@ import ExcludedUserView from '../views/ExcludedUserView.vue';
 import AlertCategoryView from '../views/AlertCategoryView.vue';
 import RouteView from '../views/RouteView.vue';
 import LocationView from '../views/LocationView.vue';
-import SettingView from '../views/SettingView.vue';
 import SettingAPIView from '../views/SettingAPIView.vue';
 import ParserView from '../views/ParserView.vue';
 import NlpTrainView from '../views/NlpTrainView.vue';
-import EventsMapView from '../views/EventsMapView.vue';
 import PocketGisView from '../views/PocketGisView.vue';
 import RegionsPolygonView from '../views/RegionsPolygonView.vue';
-import ZonePreviewView from '../views/ZonePreviewView.vue';
+import MapView from '../views/MapView.vue';
 import HelpRequestsView from '../views/HelpRequestsView.vue';
 import EventClassificationView from '../views/EventClassificationView.vue';
+import ModerationView from '../views/ModerationView.vue';
+import UsersView from '../views/UsersView.vue';
+import UserRolesView from '../views/UserRolesView.vue';
+import ReputationRulesView from '../views/ReputationRulesView.vue';
 import LoginView from "../views/LoginView.vue";
 import { useAuthStore } from "@/stores/auth";
 
@@ -64,12 +66,6 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
-      path: "/settings",
-      name: "SettingView",
-      component: SettingView,
-      meta: { requiresAuth: true },
-    },
-    {
       path: "/settings_api",
       name: "SettingAPIView",
       component: SettingAPIView,
@@ -79,12 +75,6 @@ const router = createRouter({
       path: "/parser",
       name: "ParserView",
       component: ParserView,
-      meta: { requiresAuth: true },
-    },
-    {
-      path: "/events-map",
-      name: "EventsMapView",
-      component: EventsMapView,
       meta: { requiresAuth: true },
     },
     {
@@ -101,9 +91,9 @@ const router = createRouter({
     },
     { path: "/pocketgis-categories", redirect: "/categories" },
     {
-      path: "/zone-preview",
-      name: "ZonePreviewView",
-      component: ZonePreviewView,
+      path: "/map-view",
+      name: "MapView",
+      component: MapView,
       meta: { requiresAuth: true },
     },
     {
@@ -117,6 +107,30 @@ const router = createRouter({
       name: "HelpRequestsView",
       component: HelpRequestsView,
       meta: { requiresAuth: true },
+    },
+    {
+      path: "/moderation",
+      name: "ModerationView",
+      component: ModerationView,
+      meta: { requiresAuth: true, requiresRole: ["moderator", "admin"] },
+    },
+    {
+      path: "/users",
+      name: "UsersView",
+      component: UsersView,
+      meta: { requiresAuth: true, requiresRole: ["admin"] },
+    },
+    {
+      path: "/user-roles",
+      name: "UserRolesView",
+      component: UserRolesView,
+      meta: { requiresAuth: true, requiresSuperuser: true },
+    },
+    {
+      path: "/reputation-rules",
+      name: "ReputationRulesView",
+      component: ReputationRulesView,
+      meta: { requiresAuth: true, requiresRole: ["admin"] },
     },
     { path: "/event-classification", redirect: "/categories" },
     { path: "/:pathMatch(.*)*", redirect: "/parser" },
@@ -133,6 +147,32 @@ router.beforeEach(async (to) => {
 
   if (requiresAuth && !auth.isAuthenticated) {
     return { path: "/login", query: { next: to.fullPath } };
+  }
+
+  const roles = new Set(auth.user?.roles || []);
+  const isFullAdmin = auth.user?.is_superuser || roles.has("admin");
+  const isModeratorOnly =
+    auth.isAuthenticated &&
+    !isFullAdmin &&
+    (auth.user?.is_staff || roles.has("moderator"));
+  const moderatorAllowedPaths = new Set(["/map-view", "/moderation"]);
+
+  if (isModeratorOnly && requiresAuth && !moderatorAllowedPaths.has(to.path)) {
+    return "/map-view";
+  }
+
+  const requiredRoles = to.meta.requiresRole;
+  if (requiredRoles && requiredRoles.length) {
+    const isPrivileged = isFullAdmin;
+    const allowedAsStaffModerator = auth.user?.is_staff && requiredRoles.includes("moderator");
+    const allowed = isPrivileged || allowedAsStaffModerator || requiredRoles.some((r) => roles.has(r));
+    if (!allowed) {
+      return "/map-view";
+    }
+  }
+
+  if (to.meta.requiresSuperuser && !isFullAdmin) {
+    return "/map-view";
   }
 
   if (to.path === "/login" && auth.isAuthenticated) {

@@ -289,8 +289,6 @@ async function fetchLocations() {
 
 function getLocationChatIds(loc) {
   const ids = [];
-  const chat = Number(loc?.properties?.chat);
-  if (Number.isFinite(chat)) ids.push(chat);
   const extra = Array.isArray(loc?.properties?.chats) ? loc.properties.chats : [];
   for (const id of extra) {
     const n = Number(id);
@@ -386,7 +384,7 @@ function onEditLocationClick(loc) {
     lat: hasCoords ? lat.toFixed(6) : "",
     lon: hasCoords ? lon.toFixed(6) : "",
     synonyms: loc.properties.synonyms.join(", "),
-    chats: loc.properties.chats || (loc.properties.chat ? [loc.properties.chat] : []),
+    chats: loc.properties.chats || [],
   };
 
   syncEditMapToForm();
@@ -776,7 +774,7 @@ onUnmounted(() => {
                 {{ loc.properties.name }}
               </div>
               <div class="location-chats">
-                {{ (loc.properties.chat_titles || []).join(", ") || loc.properties.chat_title || "—" }}
+                {{ (loc.properties.chat_titles || []).join(", ") || "—" }}
               </div>
               <div class="location-synonyms" v-if="loc.properties.synonyms.length">
                 Синонимы: {{ loc.properties.synonyms.join(", ") }}

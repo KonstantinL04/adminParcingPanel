@@ -1,6 +1,8 @@
 from django.db import models
 from django.contrib.auth.hashers import check_password, make_password
 from django.utils.crypto import salted_hmac
+from django.contrib.contenttypes.fields import GenericForeignKey
+from django.contrib.contenttypes.models import ContentType
 
 
 class IdentityUser(models.Model):
@@ -41,6 +43,9 @@ class IdentityUser(models.Model):
             self.password_hash,
         ).hexdigest()
 
+    def get_session_auth_fallback_hash(self):
+        return []
+
     def has_perm(self, perm, obj=None):
         return bool(self.is_active and (self.is_superuser or self.is_staff))
 
@@ -65,6 +70,85 @@ class UserProfile(models.Model):
 
     def __str__(self):
         return f"{self.user.email} profile"
+
+class UserReputationLog(models.Model):
+    ACTION_EVENT_CREATED = "event_created"
+    ACTION_EVENT_CONFIRMED = "event_confirmed"
+    ACTION_EVENT_DENIED = "event_denied"
+
+    ACTION_EDIT_APPROVED = "edit_approved"
+    ACTION_EDIT_REJECTED = "edit_rejected"
+
+    ACTION_HELP_COMPLETED = "help_completed"
+    ACTION_HELP_FAILED = "help_failed"
+    ACTION_HELP_CANCELED = "help_canceled"
+
+    ACTION_CHOICES = [
+        (ACTION_EVENT_CREATED, "event_created"),
+        (ACTION_EVENT_CONFIRMED, "event_confirmed"),
+        (ACTION_EVENT_DENIED, "event_denied"),
+
+        (ACTION_EDIT_APPROVED, "edit_approved"),
+        (ACTION_EDIT_REJECTED, "edit_rejected"),
+
+        (ACTION_HELP_COMPLETED, "help_completed"),
+        (ACTION_HELP_FAILED, "help_failed"),
+        (ACTION_HELP_CANCELED, "help_canceled"),
+    ]
+
+    user = models.ForeignKey(
+        IdentityUser,
+        on_delete=models.CASCADE,
+        related_name="reputation_logs"
+    )
+
+    action = models.CharField(
+        max_length=64,
+        choices=ACTION_CHOICES,
+        db_index=True
+    )
+
+    reputation_delta = models.IntegerField()
+    total_reputation = models.IntegerField()
+    comment = models.CharField(max_length=255, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    # Универсальная связь с сущностью-источником
+    content_type = models.ForeignKey(
+        ContentType,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True
+    )
+
+    object_id = models.PositiveIntegerField(null=True, blank=True)
+    content_object = GenericForeignKey(
+        "content_type",
+        "object_id"
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
+class ReputationRule(models.Model):
+    action = models.CharField(
+        max_length=64,
+        choices=UserReputationLog.ACTION_CHOICES,
+        unique=True,
+        db_index=True
+    )
+    title = models.CharField(max_length=128)
+    reputation_delta = models.IntegerField(default=0)
+    description = models.CharField(max_length=255, blank=True, default="")
+    enabled = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["action"]
+
+    def __str__(self):
+        return f"{self.action}: {self.reputation_delta}"
 
 
 class Role(models.Model):
@@ -107,50 +191,38 @@ class AuthIdentity(models.Model):
         return f"{self.provider}:{self.provider_user_id}"
 
 
-class SubscriptionPlan(models.Model):
-    code = models.CharField(max_length=64, unique=True)
-    title = models.CharField(max_length=128)
-    price = models.DecimalField(max_digits=10, decimal_places=2)
-    period = models.CharField(max_length=32)
-    features = models.JSONField(default=dict, blank=True)
-    is_active = models.BooleanField(default=True)
+class AppPurchase(models.Model):
+    PLATFORM_APPSTORE = "appstore"
+    PLATFORM_CHOICES = [
+        (PLATFORM_APPSTORE, "appstore"),
+    ]
 
-    def __str__(self):
-        return self.code
-
-
-class UserSubscription(models.Model):
+    STATUS_PENDING = "pending"
+    STATUS_VERIFIED = "verified"
+    STATUS_REJECTED = "rejected"
     STATUS_CHOICES = [
-        ("active", "active"),
-        ("trial", "trial"),
-        ("canceled", "canceled"),
-        ("expired", "expired"),
+        (STATUS_PENDING, "pending"),
+        (STATUS_VERIFIED, "verified"),
+        (STATUS_REJECTED, "rejected"),
     ]
 
-    PROVIDER_CHOICES = [
-        ("appstore", "appstore"),
-        ("googleplay", "googleplay"),
-        ("stripe", "stripe"),
-        ("manual", "manual"),
-    ]
-
-    user = models.ForeignKey(
-        IdentityUser,
-        on_delete=models.CASCADE,
-        related_name="subscriptions"
-    )
-    plan = models.ForeignKey(SubscriptionPlan, on_delete=models.PROTECT, related_name="subscriptions")
-
-    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default="active")
-    starts_at = models.DateTimeField()
-    ends_at = models.DateTimeField(null=True, blank=True)
-    auto_renew = models.BooleanField(default=True)
-
-    provider = models.CharField(max_length=16, choices=PROVIDER_CHOICES, default="manual")
-    provider_subscription_id = models.CharField(max_length=255, blank=True)
-
+    user = models.ForeignKey(IdentityUser, on_delete=models.CASCADE, related_name="app_purchases")
+    platform = models.CharField(max_length=32, choices=PLATFORM_CHOICES, default=PLATFORM_APPSTORE)
+    transaction_id = models.CharField(max_length=255, unique=True)
+    product_id = models.CharField(max_length=255)
+    verification_status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=STATUS_PENDING, db_index=True)
+    grants_full_access = models.BooleanField(default=False, db_index=True)
+    purchased_at = models.DateTimeField(null=True, blank=True)
+    verified_at = models.DateTimeField(null=True, blank=True)
+    verification_error = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user", "grants_full_access"]),
+        ]
+
     def __str__(self):
-        return f"{self.user.email} -> {self.plan.code}"
+        return f"{self.user.email} -> {self.product_id}"

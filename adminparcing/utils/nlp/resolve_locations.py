@@ -8,7 +8,6 @@ from typing import Optional
 
 import django
 from django.utils import timezone
-from django.db.models import Q
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 if PROJECT_ROOT not in sys.path:
@@ -17,8 +16,8 @@ if PROJECT_ROOT not in sys.path:
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "app.settings")
 django.setup()
 
-from events.models import ParsedMessage
-from adminparcing.models import Location, Setting
+from adminparcing.models import Location, ParsedMessage, Setting
+from adminparcing.services.event_client import get_processed_parsed_message_ids
 from adminparcing.utils.nlp.NLPModel import match_location
 from adminparcing.services.aggregator import process_parsed_message
 
@@ -126,13 +125,17 @@ def clean_place_candidate(raw: str) -> Optional[str]:
 
 
 def strip_category_markers(source: str, msg: ParsedMessage) -> str:
-    category = getattr(msg, "category", None)
-    if not category:
+    if not msg.parsing_category_id:
         return source
 
+    try:
+        rule = msg.parsing_category
+    except Exception:
+        rule = None
+
     cleaned = source
-    text_patterns = getattr(category, "text_patterns", None) or []
-    emoji_patterns = getattr(category, "emoji_patterns", None) or []
+    text_patterns = getattr(rule, "text_patterns", None) or []
+    emoji_patterns = getattr(rule, "emoji_patterns", None) or []
 
     for marker in [*text_patterns, *emoji_patterns]:
         marker_text = str(marker or "").replace("ё", "е").strip().lower()
@@ -209,10 +212,11 @@ def load_unresolved_category_filter() -> Optional[set[int]]:
 
 
 def ensure_unresolved_location_stub(msg: ParsedMessage, allowed_categories: Optional[set[int]]):
+    category_id = msg.parsing_category.category_id if msg.parsing_category else None
     if allowed_categories is not None:
         if not allowed_categories:
             return False
-        if not msg.category_id or msg.category_id not in allowed_categories:
+        if not category_id or category_id not in allowed_categories:
             return False
 
     candidate = extract_candidate_place_name(msg.text or "", msg)
@@ -222,7 +226,7 @@ def ensure_unresolved_location_stub(msg: ParsedMessage, allowed_categories: Opti
     exists = (
         Location.objects
         .filter(name__iexact=candidate)
-        .filter(Q(chat_id=msg.chat_id) | Q(chats__id=msg.chat_id))
+        .filter(chats__id=msg.chat_id)
         .distinct()
         .exists()
     )
@@ -231,7 +235,6 @@ def ensure_unresolved_location_stub(msg: ParsedMessage, allowed_categories: Opti
 
     location = Location.objects.create(
         name=candidate,
-        chat_id=msg.chat_id,
         city=getattr(msg.chat, "city", None),
         synonyms=[],
         location=None,
@@ -244,7 +247,9 @@ def ensure_unresolved_location_stub(msg: ParsedMessage, allowed_categories: Opti
 def process_messages(limit: Optional[int], since_minutes: Optional[int], reprocess: bool):
     qs = ParsedMessage.objects.all().order_by("created_at")
     if not reprocess:
-        qs = qs.filter(roadevent__isnull=True)
+        processed_ids = get_processed_parsed_message_ids()
+        if processed_ids:
+            qs = qs.exclude(id__in=processed_ids)
     if since_minutes:
         qs = qs.filter(created_at__gte=timezone.now() - timedelta(minutes=since_minutes))
     if limit:

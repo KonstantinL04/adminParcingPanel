@@ -1,7 +1,5 @@
 from django.db import models
 from django.contrib.gis.db import models as gis_models
-from django.contrib.contenttypes.fields import GenericForeignKey
-from django.contrib.contenttypes.models import ContentType
 
 
 class EventClass(models.Model):
@@ -32,25 +30,7 @@ class EventClassItem(models.Model):
     name = models.CharField(max_length=128)
     icon = models.ImageField(upload_to="event_class_items/", null=True, blank=True)
     source_kind = models.CharField(max_length=16, choices=SOURCE_CHOICES, db_index=True)
-
-    # Параметры зоны по умолчанию
-    speed_limit = models.IntegerField(default=0)
-    dir_type = models.IntegerField(default=1)
-    direction = models.IntegerField(default=0)
-    distance = models.IntegerField(default=0)
-    angle = models.IntegerField(default=0)
     ttl_minutes = models.PositiveIntegerField(default=60)
-    text_patterns = models.JSONField(default=list, blank=True)
-    emoji_patterns = models.JSONField(default=list, blank=True)
-
-    # Флаги, показывающие поддерживает ли событие дистанцию, скоростной лимит и т.п. 
-    supports_direction = models.BooleanField(default=True)
-    supports_speed_limit = models.BooleanField(default=True)
-    supports_distance = models.BooleanField(default=True)
-    supports_angle = models.BooleanField(default=True)
-    supports_zone_render = models.BooleanField(default=True)
-
-    details_template = models.CharField(max_length=255, blank=True, default="")
     sort_order = models.PositiveIntegerField(default=0)
     enabled = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -76,11 +56,13 @@ class MapEvent(models.Model):
     STATUS_CONFIRMED = "confirmed"
     STATUS_DENIED = "denied"
     STATUS_EXPIRED = "expired"
+    STATUS_ARCHIVED = "archived"
     STATUS_CHOICES = [
         (STATUS_ACTIVE, "active"),
         (STATUS_CONFIRMED, "confirmed"),
         (STATUS_DENIED, "denied"),
         (STATUS_EXPIRED, "expired"),
+        (STATUS_ARCHIVED, "archived"),
     ]
 
     # Основное
@@ -113,7 +95,6 @@ class MapEvent(models.Model):
     # Для динамических событий
     valid_until = models.DateTimeField(null=True, blank=True)
     confidence = models.FloatField(default=0.5)
-    comment = models.TextField(blank=True, default="")
     user_id = models.CharField(max_length=64, null=True, blank=True)
 
     first_seen_at = models.DateTimeField(auto_now_add=True)
@@ -144,20 +125,17 @@ class EventMedia(models.Model):
 
 class EntityVote(models.Model):
     #Голосование на событие
-    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
-    object_id = models.PositiveIntegerField()
-    content_object = GenericForeignKey("content_type", "object_id")
-
+    event = models.ForeignKey(MapEvent, on_delete=models.CASCADE, related_name="votes")
     user_id = models.CharField(max_length=64)
     voter_location = gis_models.PointField(null=True, blank=True)
     vote = models.SmallIntegerField(choices=[(1, "confirm"), (-1, "deny")])
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = ("content_type", "object_id", "user_id")
+        unique_together = ("event", "user_id")
         indexes = [
-            models.Index(fields=["content_type", "object_id"]),
-            models.Index(fields=["user_id"]),
+            models.Index(fields=["event"], name="events_vote_event_idx"),
+            models.Index(fields=["user_id"], name="events_vote_user_idx"),
         ]
 
 
@@ -188,70 +166,3 @@ class PocketGisImport(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
-
-
-class ParsedMessage(models.Model):
-    #Спарсенные сообщения из Telegram
-    telegram_message_id = models.BigIntegerField()
-    chat = models.ForeignKey("adminparcing.Chat", on_delete=models.PROTECT, related_name="parsed_messages")
-    author_id = models.BigIntegerField(null=True, blank=True)
-    author_name = models.CharField(max_length=255, blank=True)
-    text = models.TextField()
-    category = models.ForeignKey(EventClassItem, null=True, blank=True, on_delete=models.SET_NULL)
-    created_at = models.DateTimeField()
-    parsed_at = models.DateTimeField(auto_now_add=True)
-
-
-# ========== HELP REQUEST (взаимопомощь) ==========
-
-class HelpRequest(models.Model):
-    """Запрос о помощи — создается как обычное событие на карте"""
-    STATUS_ACTIVE = "active"
-    STATUS_IN_PROGRESS = "in_progress"  # кто-то откликнулся
-    STATUS_COMPLETED = "completed"      # помощь оказана
-    STATUS_CANCELED = "canceled"
-    STATUS_EXPIRED = "expired"
-    
-    # Связь с событием на карте
-    event = models.OneToOneField(
-        MapEvent, 
-        on_delete=models.CASCADE, 
-        related_name="help_request",
-        null=True,
-        blank=True
-    )
-    
-    # Кто создал
-    creator_user_id = models.CharField(max_length=64, db_index=True)
-    
-    # Статус
-    status = models.CharField(max_length=20, default=STATUS_ACTIVE, db_index=True)
-    
-    # Авто-архивация через N минут
-    auto_archive_at = models.DateTimeField(null=True, blank=True)
-    closed_at = models.DateTimeField(null=True, blank=True)
-    
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-
-class HelpRequestResponse(models.Model):
-    #Отклик на запрос помощи
-    help_request = models.ForeignKey(
-        HelpRequest, 
-        on_delete=models.CASCADE, 
-        related_name="responses"
-    )
-    responder_user_id = models.CharField(max_length=64, db_index=True)
-    
-    # Флаг: создатель запроса принял этот отклик
-    accepted = models.BooleanField(default=False)
-    
-    # Чат между создателем и откликнувшимся (когда отклик принят)
-    chat_room_id = models.CharField(max_length=64, blank=True, null=True)
-    
-    message = models.TextField(blank=True, default="")  # сообщение при отклике
-    created_at = models.DateTimeField(auto_now_add=True)
-    
-    class Meta:
-        unique_together = ("help_request", "responder_user_id")

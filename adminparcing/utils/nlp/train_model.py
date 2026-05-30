@@ -5,8 +5,6 @@ from typing import Optional
 import joblib
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.neighbors import KNeighborsRegressor
-from django.db.models import Q
-
 from adminparcing.models import Location
 from adminparcing.utils.nlp.NLPModel import clear_model_cache
 
@@ -14,7 +12,7 @@ MODEL_DIR = os.path.join(os.path.dirname(__file__), "models")
 
 
 def _build_dataset(chat_id: int):
-    qs = Location.objects.filter(Q(chat_id=chat_id) | Q(chats__id=chat_id)).distinct()
+    qs = Location.objects.filter(chats__id=chat_id).distinct()
     all_place_names = []
     expanded_coords = []
 
@@ -62,13 +60,9 @@ def train_for_chat(chat_id: int) -> bool:
 
 def train_all() -> int:
     count = 0
-    chat_ids_fk = set(
-        cid for cid in Location.objects.values_list("chat_id", flat=True).distinct() if cid
-    )
-    chat_ids_m2m = set(
+    chat_ids = sorted(set(
         cid for cid in Location.objects.values_list("chats__id", flat=True).distinct() if cid
-    )
-    chat_ids = sorted(chat_ids_fk | chat_ids_m2m)
+    ))
     for cid in chat_ids:
         if cid and train_for_chat(cid):
             count += 1

@@ -447,7 +447,7 @@ onMounted(async () => {
                 </button>
                 <router-link to="/regions-polygons" class="btn-outline">
                     <i class="bi bi-bounding-box me-2"></i>
-                    Полигоны областей
+                    Области и города
                 </router-link>
             </div>
 
